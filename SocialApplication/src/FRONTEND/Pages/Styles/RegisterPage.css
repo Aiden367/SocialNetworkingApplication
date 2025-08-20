@@ -1,0 +1,64 @@
+body {
+    background-image: url('../../Images/plufow-le-studio-aE8Mx8-vQss-unsplash.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    min-height: 100vh;
+    margin: 0;
+}
+
+.register-page-container
+{
+ display:flex;
+ width:800px;
+ height:150%;
+ margin-left:625px;
+}
+
+.create-account-container
+{
+    width:60%;
+    height:40%;
+    border-radius: 5px;
+    background-color: White;
+    padding:20px;
+}
+
+
+.create-account-container button {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.create-account-container button:hover {
+    transform: translateY(-2px);
+}
+
+
+.register-input-group input {
+    width: 100%;
+    padding: 12px 16px;
+    margin-bottom: 1rem;
+    margin-left:5px;
+    border: 2px solid #e1e5e9;
+    border-radius: 8px;
+    font-size: 16px;
+    transition: all 0.3s ease;
+    box-sizing: border-box;
+}
+
+.register-input-group input:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+

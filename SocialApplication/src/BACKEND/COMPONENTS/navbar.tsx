@@ -21,7 +21,7 @@ export default function Navbar() {
                 </a>
             </li>
             <li>
-                <a href="Register">
+                <a href="/Register">
                     <img src={profileImage}></img>
                 </a>
             </li>

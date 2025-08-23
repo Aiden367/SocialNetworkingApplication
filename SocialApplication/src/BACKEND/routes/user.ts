@@ -186,6 +186,20 @@ router.post('/Register', async (req, res) => {
   }
 })
 
+// GET all users (except password)
+router.get('/all', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const users = await User.find()
+      .select('_id username firstName lastName profilePhoto'); 
+
+    res.status(200).json(users);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
 // ADD THE GET ENDPOINT HERE
 router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {

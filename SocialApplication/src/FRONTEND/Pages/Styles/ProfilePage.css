@@ -1,0 +1,249 @@
+.profile-container {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 2rem;
+  width: 100%;
+  min-height: 100vh;
+  background-color: transparent; /* darker background for contrast */
+  margin-left:100px;
+}
+
+.profile-card {
+  background: transparent;
+  border-radius: 15px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+  width: 2000px; /* better width for readability */
+  padding: 2rem;
+  text-align: center;
+  margin-top: 80px;
+}
+
+.profile-header {
+  margin-bottom: 1.5rem;
+}
+
+.profile-photo {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #4a90e2;
+  margin-bottom: 1rem;
+}
+
+.profile-name {
+  font-size: 1.8rem;
+  font-weight: bold;
+  margin: 0;
+}
+
+.profile-username {
+  font-size: 1rem;
+  color: #777;
+  margin: 0.2rem 0 1rem 0;
+}
+
+.profile-info .bio {
+  font-style: italic;
+  margin-bottom: 1rem;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #eee;
+}
+
+.info-row:last-child {
+  border-bottom: none;
+}
+
+.label {
+  font-weight: bold;
+  color: #555;
+}
+
+.value {
+  color: #333;
+}
+
+.upload-section {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.upload-section input {
+  padding: 0.5rem;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+}
+
+.upload-section button {
+  padding: 0.5rem 1rem;
+  background: #4a90e2;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.upload-section button:hover {
+  background: #357abd;
+}
+
+.upload-message {
+  margin-top: 0.5rem;
+  color: green;
+  font-weight: bold;
+}
+
+
+.buttons-section {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.buttons-section button {
+  padding: 0.6rem 1.2rem;
+  background: #4a90e2;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: 0.3s;
+}
+
+.buttons-section button:hover {
+  background: #357abd;
+}
+
+/* Posts and connections lists */
+.posts-list, .connections-list {
+  margin-top: 1rem;
+  text-align: left;
+  background: transparent;
+  padding: 1rem;
+  border-radius: 10px;
+  max-height: none;
+  overflow-y: auto;
+}
+
+.posts-list h3, .connections-list h3 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  color: #333;
+}
+
+.posts-list ul, .connections-list ul {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  
+  
+}
+
+.posts-list li, .connections-list li {
+  padding: 1px;
+  background: transparent;
+  flex: 0 0 auto;    
+}
+
+.posts-list li:last-child, .connections-list li:last-child {
+  border-bottom: none;
+}
+
+
+.profile-page-icon-buttons{
+  background-color: transparent;
+}
+
+
+.posts-list li img {
+  width: 300px !important;        
+  height: 300px !important;       
+  object-fit: cover;   
+  border-radius: 1px;  
+  display: block;
+  margin: 0 auto;
+  border: 1px solid white
+}
+
+.modal-overlay {
+  position: fixed; 
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5); 
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+
+.modal-content {
+  background: white;
+  padding: 30px;
+  border-radius: 12px;
+  width: 400px;
+  max-width: 90%;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.modal-content input[type="file"],
+.modal-content textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 2px solid #e1e5e9;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.modal-content textarea {
+  resize: none;
+  height: 80px;
+}
+
+
+.modal-content button {
+  padding: 12px;
+  border-radius: 8px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.modal-content button:first-of-type {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.modal-content button:first-of-type:hover {
+  transform: translateY(-2px);
+}
+
+.modal-content button:last-of-type {
+  background: #e1e5e9;
+  color: #333;
+}
+
+.modal-content button:last-of-type:hover {
+  transform: translateY(-2px);
+}

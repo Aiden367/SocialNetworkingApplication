@@ -14,7 +14,6 @@
     gap: 20px;
 }
 
-/* Display-flex - makes the */
 .social-buttons-container {
     display: flex;
     background-color: white;
@@ -24,11 +23,9 @@
     padding: 0;
 }
 
-/*list-style styles the list*/
 .social-buttons-container ul {
     list-style: none;
     gap: 20px;
-
 }
 
 .social-buttons-container a {
@@ -49,14 +46,14 @@
     margin-left: 35px;
     border: 2px solid gray;
     border-radius: 20px;
-    padding: 0;
+    padding: 10px;
 }
 
-.pages-you-like-container ul{
+.pages-you-like-container ul {
     list-style: none;
 }
 
-.pages-you-like-container a{
+.pages-you-like-container a {
     color: black;
 }
 
@@ -69,35 +66,27 @@
 .right-wrapper {
     display: flex;
     flex-direction: column;
-    width: 250px;
+    width: 300px;
     gap: 20px;
     margin-left: auto;
-    width: 300px;
 }
 
-.friends-container {
-    width: 300px;
-    /* Adjust as needed */
-    border: 2px solid gray;
-    border-radius: 20px;
-    padding: 15px;
-    align-self: flex-start;
-    /* Aligns to top */
-}
-.groups-container {
+.friends-container, .groups-container {
     width: 300px;
     border: 2px solid gray;
     border-radius: 20px;
     padding: 15px;
     align-self: flex-start;
-    /* Aligns to top */
 }
-.groups-container ul {
+
+.groups-container ul, .friends-container ul {
     list-style: none;
 }
+
 .groups-container a {
     color: black;
 }
+
 /*----------------------------------*/
 /*CENTER PART OF PAGE*/
 .center-wrapper {
@@ -106,5 +95,84 @@
     border-radius: 2px;
     padding: 20px;
     background-color: #EDEDED;
-    width:600px;
+    width: 600px;
+}
+
+/*----------------------------------*/
+/*CHAT STYLES*/
+.chat-container {
+    width: 300px;
+    border: 2px solid gray;
+    border-radius: 20px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    background-color: #fff;
+    height: 500px;
+}
+
+.chat-container h4 {
+    text-align: center;
+    color: gray;
+}
+
+.chat-container input {
+    margin-top: 5px;
+    margin-bottom: 5px;
+    padding: 8px;
+    border-radius: 10px;
+    border: 1px solid gray;
+    font-size: 14px;
+}
+
+.chat-container button {
+    padding: 8px;
+    border-radius: 10px;
+    border: none;
+    background-color: #4CAF50;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    margin-bottom: 10px;
+}
+
+.chat-container button:disabled {
+    background-color: gray;
+    cursor: not-allowed;
+}
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    margin-bottom: 5px;
+    border: 1px solid #ccc;
+    border-radius: 10px;
+    padding: 5px;
+    background-color: #F7F7F7;
+}
+
+.chat-messages ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.chat-messages li {
+    padding: 6px 10px;
+    margin: 5px 0;
+    border-radius: 15px;
+    max-width: 80%;
+    word-wrap: break-word;
+}
+
+.chat-messages li.sent {
+    background-color: #DCF8C6;
+    align-self: flex-end;
+    text-align: right;
+}
+
+.chat-messages li.received {
+    background-color: #FFFFFF;
+    align-self: flex-start;
+    text-align: left;
 }

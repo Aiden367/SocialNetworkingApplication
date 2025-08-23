@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Google Cloud credentials
+src/BACKEND/keys/social-application-project-da6debcdf063.json

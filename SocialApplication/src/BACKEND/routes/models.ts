@@ -1,9 +1,8 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
-
 // Sub-schema for uploaded media
 const MediaSchema = new Schema({
-  url: { type: String, required: true }, // Cloudinary/S3 URL
+  url: { type: String, required: true }, // Cloud storage URL
   mediaType: { type: String, enum: ['image', 'video'], required: true },
   caption: { type: String },
   uploadDate: { type: Date, default: Date.now },
@@ -65,7 +64,7 @@ const UserSchema = new Schema({
   bio: { type: String, maxlength: 500 },
   profilePhoto: {
     url: { type: String },
-    publicId: { type: String } // For cloud storage management
+    publicId: { type: String }
   },
   coverPhoto: {
     url: { type: String },
@@ -73,15 +72,15 @@ const UserSchema = new Schema({
   },
 
   // Social Features
-  connections: [ConnectionSchema], // Two-way friendships/followers
-  sentRequests: [ConnectionSchema], // Outgoing friend requests
-  receivedRequests: [ConnectionSchema], // Incoming friend requests
+  connections: [ConnectionSchema],
+  sentRequests: [ConnectionSchema],
+  receivedRequests: [ConnectionSchema],
   blockedUsers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
 
   // Content
-  posts: [{ type: Schema.Types.ObjectId, ref: 'Post' }],
-  mediaUploads: [MediaSchema],
-  savedPosts: [{ type: Schema.Types.ObjectId, ref: 'Post' }],
+  posts: [MediaSchema],       // <- store full media objects here
+  mediaUploads: [MediaSchema], 
+  savedPosts: [{ type: Schema.Types.ObjectId, ref: 'Post' }], // optional if you still use Post references
 
   // Messaging
   conversations: [{
@@ -116,8 +115,6 @@ const UserSchema = new Schema({
   }
 }, { timestamps: true });
 
-
-
 const User = mongoose.model('User', UserSchema);
 
-module.exports = {User};
+module.exports = { User };

@@ -43,8 +43,6 @@ const Login: React.FC = () => {
         }
     }
     return (
-        <>
-        <Navbar />
         <div className="Login-Page-Container">
             <div className="Login-Container">
                 <form onSubmit={handleLogin}>
@@ -73,8 +71,6 @@ const Login: React.FC = () => {
                 </p>
             </div>
         </div>
-        </>
-
     )
 }
 

@@ -4,6 +4,7 @@ import "./navbarStyles.css"
 import messageImage from "./CompImages/messenger.png";
 import notificationImage from "./CompImages/bell.png";
 import profileImage from './CompImages/user.png';
+import { useNavigate } from 'react-router-dom';
 export default function Navbar() {
 
     interface UserProfile {
@@ -21,6 +22,7 @@ export default function Navbar() {
     const { userId, token, logout } = useUser();
     const [isLoading, setIsLoading] = useState(false);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+    const navigate = useNavigate();
     // Fetch user profile if logged in
     useEffect(() => {
         if (userId) {
@@ -53,7 +55,7 @@ export default function Navbar() {
     };
     const handleLogout = () => {
         logout();
-        window.location.href = '/';
+        navigate('/Login');
     };
 
 
@@ -66,14 +68,15 @@ export default function Navbar() {
                 </li>
                 <li>
                     <a href="/messages">
-                        <img src={messageImage} alt="Messages" />
+                        <img src={messageImage} alt="Messages" className="icon" />
                     </a>
                 </li>
                 <li>
                     <a href="/notifications">
-                        <img src={notificationImage} alt="Notifications" />
+                        <img src={notificationImage} alt="Notifications" className="icon" />
                     </a>
                 </li>
+
                 <li className="profile-item">
                     {userId ? (
                         // User is logged in - show profile picture with dropdown

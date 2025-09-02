@@ -8,7 +8,7 @@ import eventImage from "../Images/event.png";
 import photosImage from "../Images/gallery.png";
 import likePostImage from "../Images/application.png";
 import commentPostImage from "../Images/code.png";
-
+import { useNavigate } from 'react-router-dom';
 import { ChatWebSocket, WebSocketMessage } from '../../BACKEND/websocket';
 
 interface DisplayMessage {
@@ -20,14 +20,24 @@ interface DisplayMessage {
   timestamp?: string;
 }
 
+interface Story {
+  _id: string;
+  url: string;
+  mediaType: 'image' | 'video';
+  caption?: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+
 interface Friend {
   _id: string;
   username: string;
   firstName?: string;
   lastName?: string;
   profilePhoto?: { url: string };
+  stories?: Story[]; // <-- add this line
 }
-
 interface NormalizedFriend extends Friend {
   user: string;
 }
@@ -48,14 +58,16 @@ interface FriendResponse {
 }
 
 interface Conversation {
-  friend: Friend;
+  conversationId: string;
+  friend: Friend | null; // backend guarantees friend is the other user
   lastMessage?: {
     content: string;
-    sender: string;
+    sender: string | Friend;
+    recipient?: string | Friend;
     timestamp: string;
-  };
-  conversationId: string;
+  } | null;
 }
+
 
 const Home: React.FC = () => {
   const { userId, token } = useUser();
@@ -74,7 +86,15 @@ const Home: React.FC = () => {
   const [friendsPosts, setFriendsPosts] = useState<any[]>([]);
   const [commentInput, setCommentInput] = useState<{ [postId: string]: string }>({});
   const [showCommentsModal, setShowCommentsModal] = useState<{ [postId: string]: boolean }>({});
-
+  const [storyFile, setStoryFile] = useState<File | null>(null);
+  const [storyPreview, setStoryPreview] = useState<string | null>(null);
+  const [storyCaption, setStoryCaption] = useState('');
+  const [showUploadStory, setShowUploadStory] = useState(false);
+  const [showStoryModal, setShowStoryModal] = useState(false);
+  const [currentStory, setCurrentStory] = useState<any | null>(null); // the story being viewed
+  const [storiesFetched, setStoriesFetched] = useState(false)
+  const [groups, setGroups] = useState<{ _id: string; name: string; profilePhoto?: { url: string } }[]>([]);
+  const navigate = useNavigate();
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   // WebSocket
@@ -95,6 +115,71 @@ const Home: React.FC = () => {
     return () => ws.close();
   }, [userId]);
 
+  const handleStoryFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    setStoryFile(file);
+
+    // preview image/video
+    const reader = new FileReader();
+    reader.onload = () => setStoryPreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const fetchAllGroups = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`http://localhost:5000/user/groups/all`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to fetch groups');
+
+      // Backend returns _id, name, profileImage
+      const data: { _id: string; name: string; profileImage?: string }[] = await res.json();
+
+      const normalizedGroups = data.map(g => ({
+        _id: g._id, // or g.groupId if backend sends that
+        name: g.name,
+        profilePhoto: g.profileImage ? { url: g.profileImage } : undefined, // wrap profileImage in object with url
+      }));
+
+      setGroups(normalizedGroups);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+
+  const uploadStory = async () => {
+    if (!storyFile || !userId || !token) return;
+
+    const formData = new FormData();
+    formData.append('storyMedia', storyFile);
+    formData.append('caption', storyCaption);
+    formData.append('privacy', 'friends'); // optional
+
+    try {
+      const res = await fetch(`http://localhost:5000/user/${userId}/upload-story`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+      if (!res.ok) throw new Error('Upload failed');
+      const data = await res.json();
+      console.log('Story uploaded:', data);
+
+      // reset
+      setStoryFile(null);
+      setStoryPreview(null);
+      setStoryCaption('');
+      fetchFriendsPosts(); // refresh feed if necessary
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   // Fetch functions
   const fetchFriends = async () => {
     if (!token || !userId) return;
@@ -104,11 +189,19 @@ const Home: React.FC = () => {
       });
       if (!res.ok) throw new Error('Failed to fetch friends');
       const data: FriendResponse = await res.json();
-      const normalizedFriends = data.friends.map(f => ({
-        _id: f._id || (f as any).user?._id,
-        username: f.username || (f as any).user?.username,
-        profilePhoto: f.profilePhoto || (f as any).user?.profilePhoto,
-      }));
+      const normalizedFriends = data.friends.map(f => {
+        const friendUser = (f as any).user;
+        const uid = typeof friendUser === "string" ? friendUser : friendUser?._id || f._id;
+        const username = typeof friendUser === "string" ? f.username : friendUser?.username || f.username;
+        const profilePhoto = typeof friendUser === "string" ? f.profilePhoto : friendUser?.profilePhoto || f.profilePhoto;
+
+        return {
+          _id: f._id || uid,
+          user: uid,  // <-- keep this so fetchStories works
+          username,
+          profilePhoto,
+        } as NormalizedFriend;
+      });
       setFriends(normalizedFriends);
       setIncomingRequests(data.incoming);
       setOutgoingRequests(data.outgoing);
@@ -134,12 +227,34 @@ const Home: React.FC = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error('Failed to fetch conversations');
+
       const data: Conversation[] = await res.json();
+
+      // No need to remap lastMessage, backend already normalized
       setConversations(data);
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  useEffect(() => { fetchFriends(); fetchOtherUsers(); fetchConversations(); }, [token, userId]);
+  const fetchConversationMessages = async (friendId: string) => {
+    if (!token || !userId) return;
+    try {
+      const res = await fetch(`http://localhost:5000/user/${userId}/conversation/${friendId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to fetch conversation');
+      const data: { messages: DisplayMessage[] } = await res.json();
+      setMessages(data.messages.map(msg => ({
+        type: 'message',
+        sender: msg.sender,
+        recipientId: msg.recipientId,
+        content: msg.content,
+        timestamp: msg.timestamp
+      })));
+    } catch (err) { console.error(err); }
+  };
+  useEffect(() => { fetchFriends(); fetchOtherUsers(); fetchConversations(); fetchAllGroups(); }, [token, userId]);
 
   const fetchFriendsPosts = async () => {
     if (!token || !userId) return;
@@ -176,6 +291,67 @@ const Home: React.FC = () => {
 
   useEffect(() => { fetchFriendsPosts(); }, [token, userId]);
 
+
+  const fetchStories = async () => {
+    if (!token || !userId || !friends.length) return;
+
+    const normalizedFriends: NormalizedFriend[] = friends
+      .map(f => {
+        const friendUser = (f as any).user;
+        if (!friendUser) return null;
+
+        const uid = typeof friendUser === 'string' ? friendUser : friendUser._id;
+        const username = f.username || (typeof friendUser === 'object' ? friendUser.username : '');
+        const profilePhoto = f.profilePhoto || (typeof friendUser === 'object' ? friendUser.profilePhoto : undefined);
+
+        return { ...f, user: uid, username, profilePhoto };
+      })
+      .filter(Boolean) as NormalizedFriend[];
+
+    const storiesByFriend: { [userId: string]: Story[] } = {};
+
+    for (const friend of normalizedFriends) {
+      if (!friend.user) continue;
+
+      try {
+        const res = await fetch(`http://localhost:5000/user/${friend.user}/stories`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) continue;
+
+        const data = await res.json();
+
+        // 🔥 Normalize stories so they match your frontend `Story` interface
+        storiesByFriend[friend.user] = (data.stories || []).map((s: any) => ({
+          _id: s._id,
+          url: s.media?.url,
+          mediaType: s.media?.mediaType,
+          caption: s.media?.caption,
+          createdAt: s.postedAt,
+          expiresAt: s.expiresAt,
+        }));
+      } catch (err) {
+        console.error(`Error fetching stories for ${friend.username}:`, err);
+      }
+    }
+
+    setFriends(prev =>
+      prev.map(f => {
+        const friendUserId = (f as any).user;
+        return { ...f, stories: storiesByFriend[friendUserId] || [] };
+      })
+    );
+  };
+
+
+  // Fetch stories when friends change
+  useEffect(() => {
+    if (friends.length && !storiesFetched) {
+      fetchStories();
+      setStoriesFetched(true);
+    }
+  }, [friends, storiesFetched]);
+
   // Friend Request actions
   const sendFriendRequest = async (targetId: string) => {
     if (!token || !userId) return;
@@ -205,14 +381,55 @@ const Home: React.FC = () => {
   };
 
   // Chat window functions
-  const openChatWindow = (friend: Friend) => { setRecipient(friend); setChatBarOpen(true); };
-  const closeChatWindow = () => { setRecipient(null); setMessages([]); setChatBarOpen(false); };
-  const sendMessage = () => {
-    if (!chatWs || !recipient || !chatInput) return;
-    chatWs.sendMessage(recipient._id, chatInput);
-    setMessages(prev => [...prev, { type: 'message', sender: userId ?? undefined, recipientId: recipient._id, content: chatInput, timestamp: new Date().toISOString() }]);
-    setChatInput('');
+  const openChatWindow = (friend: Friend) => {
+    setRecipient(friend);
+    setChatBarOpen(true);
+    fetchConversationMessages(friend._id); // fetch messages here
   };
+
+  const closeChatWindow = () => { setRecipient(null); setMessages([]); setChatBarOpen(false); };
+
+
+
+  const sendMessage = async () => {
+    if (!recipient || !chatInput || !userId || !token) return;
+
+    try {
+      // Call backend to persist message
+      const res = await fetch(`http://localhost:5000/user/${userId}/message/${recipient._id}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ content: chatInput }),
+      });
+
+      if (!res.ok) throw new Error("Failed to send message");
+      const savedMessage = await res.json();
+
+      // Optionally also send over WebSocket for realtime updates
+      chatWs?.sendMessage(recipient._id, chatInput);
+
+      // Update local state
+      setMessages(prev => [
+        ...prev,
+        {
+          type: "message",
+          sender: userId,
+          recipientId: recipient._id,
+          content: savedMessage.content,
+          timestamp: savedMessage.timestamp,
+        },
+      ]);
+
+      setChatInput("");
+      fetchConversations(); // refresh sidebar with latest message
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
 
   const activeChats = conversations;
 
@@ -226,23 +443,116 @@ const Home: React.FC = () => {
           <div className="social-buttons-container">
             <ul>
               <li><img src={feedImage} alt="Feed" /><span>Feed</span></li>
-              <li><img src={friendsImage} alt="Friends" /><span>Friends</span></li>
-              <li><img src={eventImage} alt="Event" /><span>Event</span></li>
-              <li><img src={photosImage} alt="Photos" /><span>Photos</span></li>
+              <li>
+                <img src={friendsImage} alt="Friends" /><span>Friends</span></li>
+              <li>
+                <a href="/CreateGroup" className="menu-link">
+                  <img src={eventImage} alt="Event" />
+                  <span>Event</span>
+                </a>
+              </li>
+              <li onClick={() => setShowUploadStory(prev => !prev)}>
+                <img src={photosImage} alt="Photos" />
+                <span>Photos</span>
+              </li>
             </ul>
           </div>
+          {showUploadStory && (
+            <div className="upload-story-modal">
+              <div className="upload-story-modal-content">
+                <button className="close-modal" onClick={() => setShowUploadStory(false)}>✖</button>
+                <h4>Upload a Story</h4>
+                <input type="file" accept="image/*,video/*" onChange={handleStoryFileChange} />
+                {storyPreview && (
+                  <div className="story-preview">
+                    {storyFile?.type.startsWith('video') ? (
+                      <video src={storyPreview} controls width={300}></video>
+                    ) : (
+                      <img src={storyPreview} alt="preview" width={300} />
+                    )}
+                  </div>
+                )}
+                <input
+                  type="text"
+                  placeholder="Add a caption..."
+                  value={storyCaption}
+                  onChange={e => setStoryCaption(e.target.value)}
+                />
+                <button onClick={uploadStory} disabled={!storyFile}>Upload Story</button>
+              </div>
+            </div>
+          )}
           <div className="pages-you-like-container">
-            <h4>PAGES YOU LIKE</h4>
+            <h4>Groups</h4>
             <ul>
-              <li><span>Fashion Design</span></li>
-              <li><span>Graphic Design</span></li>
-              <li><span>Web Designer</span></li>
+              {groups.length === 0 ? (
+                <li>No groups yet</li>
+              ) : (
+                groups.map(group => (
+                  <li
+                    key={group._id}
+                    className="clickable-group"
+                    onClick={() => navigate(`/group/${group._id}`)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <img
+                      src={group.profilePhoto?.url || "/default-group-avatar.png"}
+                      alt={group.name}
+                      className="group-avatar"
+                    />
+                    <span>{group.name}</span>
+                  </li>
+                ))
+              )}
             </ul>
           </div>
         </div>
-
         {/* CENTER */}
         <div className="center-wrapper">
+          {/* STORY BAR */}
+          <h2 className="stories-heading">Stories</h2>
+          <div className="story-bar-container">
+            {friends.map(friend => {
+              const story = friend.stories?.[0];
+              if (!story) return null;
+              return (
+                <div key={friend._id} className="story-card">
+                  {/* Thumbnail */}
+                  {story.mediaType === "image" ? (
+                    <img src={story.url} className="story-thumbnail" />
+                  ) : (
+                    <video src={story.url} className="story-thumbnail" muted />
+                  )}
+                  {/* Footer */}
+                  <div className="story-footer">
+                    <img
+                      src={friend.profilePhoto?.url || "/default-avatar.png"}
+                      className="story-footer-avatar"
+                    />
+                    <span className="story-footer-username">{friend.username}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {/* STORY PREVIEW MODAL */}
+          {currentStory && (
+            <div
+              className="story-preview-overlay"
+              onClick={() => setCurrentStory(null)}
+            >
+              {currentStory.mediaType === "image" ? (
+                <img
+                  src={currentStory.url}
+                  alt="Story"
+                  className="story-preview-media"
+                />
+              ) : (
+                <video src={currentStory.url} controls className="story-preview-media" />
+              )}
+            </div>
+          )}
+
           <h2>News Feed / Posts Section</h2>
           {friendsPosts.length === 0 ? (
             <p>No posts from friends yet.</p>
@@ -388,15 +698,23 @@ const Home: React.FC = () => {
           <div className="chat-bar open">
             <h4>Chats</h4>
             <ul className="chat-list">
-              {activeChats.map(chat => (
-                <li key={chat.conversationId} onClick={(e) => { e.preventDefault(); openChatWindow(chat.friend); }}>
-                  <img className="friend-avatar" src={chat.friend.profilePhoto?.url || '/default-avatar.png'} alt={chat.friend.username} />
-                  <div>
-                    <span>{chat.friend.username}</span>
-                    <p>{chat.lastMessage?.content || ''}</p>
-                  </div>
-                </li>
-              ))}
+              {activeChats.length > 0 ? (
+                activeChats.map(chat => chat.friend ? (
+                  <li key={chat.conversationId} onClick={(e) => {
+                    e.preventDefault();
+                    if (chat.friend) openChatWindow(chat.friend); // <-- type guard
+                  }}>
+                    <img className="friend-avatar" src={chat.friend.profilePhoto?.url || '/default-avatar.png'} alt={chat.friend.username || 'Unknown'} />
+                    <div>
+                      <span>{chat.friend.username || 'Unknown'}</span>
+                      <p>{chat.lastMessage?.content || ''}</p>
+                    </div>
+                  </li>
+                ) : null)
+              ) : (
+                <li>No active chats</li>
+              )}
+
             </ul>
           </div>
         )}

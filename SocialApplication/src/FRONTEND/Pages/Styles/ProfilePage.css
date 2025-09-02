@@ -6,7 +6,7 @@
   width: 100%;
   min-height: 100vh;
   background-color: transparent; /* darker background for contrast */
-  margin-left:100px;
+  margin-left:50px;
 }
 
 .profile-card {
@@ -17,6 +17,7 @@
   padding: 2rem;
   text-align: center;
   margin-top: 80px;
+  
 }
 
 .profile-header {

@@ -1,5 +1,5 @@
 const bcrypt = require("bcrypt");
-const { User } = require('./models');
+const { User, Conversation, Group } = require('./models');
 const jwt = require("jsonwebtoken");
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
@@ -9,6 +9,18 @@ import { Router, Request, Response, NextFunction } from "express";
 import multer from 'multer';
 import mongoose from 'mongoose';
 const upload = multer({ storage: multer.memoryStorage() });
+
+
+interface GroupType extends Document {
+  _id: string;
+  name: string;
+  description?: string;
+  profileImage?: { url: string; publicId?: string };
+  coverImage?: { url: string; publicId?: string };
+  members: { user: any; role?: string; joinedAt?: Date }[];
+  createdBy: any;
+  createdAt: Date;
+}
 
 
 interface FriendRequest {
@@ -23,14 +35,13 @@ interface FriendRequest {
 }
 
 
-// Define Message interface (matches MessageSchema)
 interface Message {
   content: string;
-  sender: ObjectId;
-  recipient: ObjectId;
+  sender: ObjectId | { _id: string; username: string; profilePhoto?: { url: string } };
+  recipient: ObjectId | { _id: string; username: string; profilePhoto?: { url: string } };
   timestamp: Date;
   read: boolean;
-  attachments: any[]; // can refine later
+  attachments: any[];
 }
 
 
@@ -39,6 +50,21 @@ interface Conversation {
   participants: (mongoose.Types.ObjectId | { _id: string; username: string; profilePhoto?: { url: string } })[];
   messages: Message[];
   lastUpdated?: Date;
+}
+
+// ADD THIS NEW INTERFACE BELOW
+interface ConversationType {
+  _id: string;
+  participants: { _id: string; username: string; profilePhoto?: { url: string } }[];
+  messages: {
+    _id: string;
+    content: string;
+    sender: { _id: string; username: string; profilePhoto?: { url: string } };
+    recipient: { _id: string; username: string; profilePhoto?: { url: string } };
+    timestamp: Date;
+    read: boolean;
+    attachments: any[];
+  }[];
 }
 
 interface UserWithConversations {
@@ -341,34 +367,50 @@ router.get('/by-username/:username', authenticateToken, async (req: Authenticate
   }
 });
 
-// GET conversation between two users
 router.get('/:userId/conversation/:recipientId', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { userId, recipientId } = req.params;
 
-    // Ensure requesting user matches authenticated user
     if (req.user?.id !== userId) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    // Convert to ObjectIds
+    const userObjectId = new mongoose.Types.ObjectId(userId);
+    const recipientObjectId = new mongoose.Types.ObjectId(recipientId);
 
-    // Cast conversations to correct type
-    const conversations = user.conversations as Conversation[];
+    // Sort IDs for consistent chatKey
+    const participantIds = [userObjectId.toString(), recipientObjectId.toString()].sort();
+    const chatKey = participantIds.join('_');
 
-    // Explicitly type 'c' here
-    const conversation = conversations.find((c: Conversation) =>
-      c.participants.map(p => p.toString()).includes(userId) &&
-      c.participants.map(p => p.toString()).includes(recipientId)
-    );
+    // Find existing conversation
+    let conversation = await Conversation.findOne({ chatKey })
+      .populate('messages.sender', 'username profilePhoto')
+      .populate('messages.recipient', 'username profilePhoto');
 
-    res.status(200).json({ messages: conversation?.messages || [] });
+    // Create an empty conversation if none exists
+    if (!conversation) {
+      conversation = new Conversation({
+        participants: participantIds,
+        messages: [],
+        lastUpdated: new Date(),
+        chatKey,
+      });
+      await conversation.save();
+    }
+
+    res.status(200).json({ messages: conversation.messages, conversationId: conversation._id });
+
   } catch (err) {
     console.error('Error fetching conversation:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+
+
+
+
 
 // SEND friend request
 router.post('/:id/connect/:targetId', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
@@ -595,32 +637,51 @@ router.get('/:id/others', authenticateToken, async (req: AuthenticatedRequest, r
 router.get('/:id/conversations', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
-    if (!req.user || req.user.id !== id) return res.status(403).json({ error: 'Unauthorized' });
 
-    const user = await User.findById(id)
-      .populate('conversations.participants', 'username profilePhoto')
-      .populate('conversations.messages.sender', 'username profilePhoto')
-      .populate('conversations.messages.recipient', 'username profilePhoto') as unknown as UserWithConversations;
+    if (!req.user || req.user.id !== id) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
 
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    // Fetch all conversations that include this user
+    const conversations = await Conversation.find({ participants: id })
+      .populate('participants', 'username profilePhoto')
+      .populate('messages.sender', 'username profilePhoto')
+      .populate('messages.recipient', 'username profilePhoto')
+      .sort({ lastUpdated: -1 }); // newest first
 
-    // Map to include only the other participant and last message
-    const chats = user.conversations.map((c: Conversation) => {
-      const otherParticipant = c.participants.find((p: any) => (p as any)._id.toString() !== id);
-      const lastMessage = c.messages[c.messages.length - 1];
+    // Map conversations to chat summaries
+    const chats = conversations.map((conversation: ConversationType) => {
+      const lastMessage = conversation.messages[conversation.messages.length - 1] || null;
+
+      // The friend is the participant who is not the current user
+      const friend = conversation.participants.find(p => p._id.toString() !== id.toString());
+
       return {
-        friend: otherParticipant,
-        lastMessage,
-        conversationId: c._id
+        conversationId: conversation._id,
+        friend: friend
+          ? { _id: friend._id, username: friend.username, profilePhoto: friend.profilePhoto }
+          : null,
+        lastMessage: lastMessage
+          ? {
+            ...lastMessage,
+            sender: lastMessage.sender,
+            recipient: lastMessage.recipient
+          }
+          : null,
       };
     });
 
     res.status(200).json(chats);
   } catch (err) {
-    console.error(err);
+    console.error('Error fetching conversations:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+
+
+
+
 
 // Comment on a post
 router.post('/:userId/posts/:postId/comment', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
@@ -657,6 +718,217 @@ router.post('/:userId/posts/:postId/comment', authenticateToken, async (req: Aut
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+
+router.post('/:id/upload-story', authenticateToken, upload.single('storyMedia'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+
+    // Type guard for req.file
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded.' });
+    }
+
+    const userId = req.user.id;
+    if (req.params.id !== userId) return res.status(403).json({ error: 'Access denied' });
+
+    const filename = `${userId}_story_${Date.now()}_${req.file.originalname}`;
+    const file = bucket.file(filename);
+
+    const blobStream = file.createWriteStream({
+      resumable: false,
+      contentType: req.file.mimetype,
+    });
+
+    blobStream.on('error', (err: Error) => {
+      console.error('Upload error:', err);
+      res.status(500).json({ error: 'Upload failed' });
+    });
+
+    blobStream.on('finish', async () => {
+      const [signedUrl] = await file.getSignedUrl({
+        action: 'read',
+        expires: Date.now() + 24 * 60 * 60 * 1000, // 24 hours access
+      });
+
+      const newStory = {
+        media: {
+          url: signedUrl,
+          mediaType: req.file!.mimetype.startsWith('video') ? 'video' : 'image', // non-null assertion is safe here
+          caption: req.body.caption || '',
+          uploadDate: new Date(),
+          likes: [],
+          comments: [],
+        },
+        postedAt: new Date(),
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // story expires in 24 hours
+        viewers: [],
+        privacy: req.body.privacy || 'friends',
+      };
+
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { $push: { stories: newStory } },
+        { new: true }
+      );
+
+      res.status(200).json({
+        message: 'Story uploaded successfully',
+        story: updatedUser?.stories[updatedUser.stories.length - 1],
+      });
+    });
+
+    blobStream.end(req.file.buffer);
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
+
+// GET stories for a user
+router.get('/:id/stories', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Only allow access to own stories or friends' stories
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+
+    const currentUser = await User.findById(req.user.id).populate('connections.user', '_id');
+    if (!currentUser) return res.status(404).json({ error: 'Current user not found' });
+
+    const requestedUser = await User.findById(id).select('stories connections');
+    if (!requestedUser) return res.status(404).json({ error: 'User not found' });
+
+    // Check if the requested user is the authenticated user
+    const isSelf = req.user.id === id;
+
+    // Check if the requested user is a friend
+    const isFriend = currentUser.connections?.some(
+      (c: any) => c.user._id.toString() === id && c.status === 'accepted'
+    );
+
+    if (!isSelf && !isFriend) {
+      return res.status(403).json({ error: 'Access denied, not a friend' });
+    }
+
+    // Filter stories that haven't expired yet
+    const activeStories = (requestedUser.stories || []).filter(
+      (story: any) => new Date(story.expiresAt) > new Date()
+    );
+
+    res.status(200).json({ stories: activeStories });
+  } catch (err) {
+    console.error('Error fetching stories:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
+router.post('/:senderId/message/:recipientId', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { senderId, recipientId } = req.params;
+    const { content } = req.body;
+
+    if (!req.user || req.user.id !== senderId) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    if (!content || !content.trim()) {
+      return res.status(400).json({ error: 'Message content is required' });
+    }
+
+    const senderObjectId = new mongoose.Types.ObjectId(senderId);
+    const recipientObjectId = new mongoose.Types.ObjectId(recipientId);
+
+    const participantIds = [senderObjectId.toString(), recipientObjectId.toString()].sort();
+    const chatKey = participantIds.join('_');
+
+    // Only find existing conversation — do NOT create
+    const conversation = await Conversation.findOne({ chatKey });
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation does not exist. Open chat first.' });
+    }
+
+    const newMessage = {
+      content,
+      sender: senderObjectId,
+      recipient: recipientObjectId,
+      timestamp: new Date(),
+      read: false,
+      attachments: [],
+    };
+
+    conversation.messages.push(newMessage);
+    conversation.lastUpdated = new Date();
+    await conversation.save();
+
+    await conversation.populate([
+      { path: 'messages.sender', select: 'username profilePhoto' },
+      { path: 'messages.recipient', select: 'username profilePhoto' },
+    ]);
+
+    res.status(201).json(conversation.messages[conversation.messages.length - 1]);
+
+  } catch (err) {
+    console.error('Error sending message:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
+
+// GET all groups (no filtering)
+router.get('/groups/all', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    // Fetch all groups, populate creator and member info
+    const groups = await Group.find()
+      .populate('createdBy', 'username profilePhoto')        // creator info
+      .populate('members.user', 'username profilePhoto')    // members info
+      .sort({ createdAt: -1 });                             // newest first
+
+    // Define GroupSummary type for the response
+    interface GroupSummary {
+      _id: string;
+      name: string;
+      description?: string;
+      profileImage?: string;
+      coverImage?: string;
+      membersCount: number;
+      createdBy: {
+        _id: string;
+        username: string;
+        profilePhoto?: { url: string; publicId?: string };
+      } | null;
+      createdAt: Date;
+    }
+
+    // Explicitly type 'group' to fix TS error
+    const groupSummaries: GroupSummary[] = groups.map((group: GroupType) => ({
+      _id: group._id.toString(),
+      name: group.name,
+      description: group.description,
+      profileImage: group.profileImage?.url,
+      coverImage: group.coverImage?.url,
+      membersCount: group.members.length,
+      createdBy: group.createdBy
+        ? {
+          _id: group.createdBy._id.toString(),
+          username: group.createdBy.username,
+          profilePhoto: group.createdBy.profilePhoto,
+        }
+        : null,
+      createdAt: group.createdAt,
+    }));
+
+    res.status(200).json(groupSummaries);
+  } catch (err) {
+    console.error('Error fetching groups:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
+
 
 
 

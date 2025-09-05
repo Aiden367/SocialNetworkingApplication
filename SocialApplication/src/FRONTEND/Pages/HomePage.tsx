@@ -437,51 +437,116 @@ const Home: React.FC = () => {
     <>
       <Navbar />
       <div className="home-page-container">
+        {showUploadStory && (
+          <div className="upload-story-modal">
+            <div className="upload-story-modal-content">
+              {/* Header */}
+              <div className="upload-story-modal-header">
+                <h3>Upload a Story</h3>
+                <button className="close-modal" onClick={() => setShowUploadStory(false)}>
+                  ✖
+                </button>
+              </div>
 
+              {/* Body */}
+              <div className="upload-story-modal-body">
+                {!storyFile ? (
+                  /* Upload Area */
+                  <div className="upload-area" onClick={() => {
+                    const fileInput = document.getElementById('story-file-input');
+                    if (fileInput) {
+                      (fileInput as HTMLInputElement).click();
+                    }
+                  }}>
+                    <div className="upload-icon">📷</div>
+                    <div className="upload-text">Upload your story</div>
+                    <div className="upload-subtext">Choose a photo or video to share</div>
+                    <button type="button" className="upload-button">
+                      📁 Choose File
+                    </button>
+                    <input
+                      id="story-file-input"
+                      type="file"
+                      accept="image/*,video/*"
+                      onChange={handleStoryFileChange}
+                      style={{ display: 'none' }}
+                    />
+                  </div>
+                ) : (
+                  /* Preview Area */
+                  <div className="story-preview">
+                    {storyFile?.type.startsWith('video') ? (
+                      <video
+                        src={storyPreview || undefined}
+                        controls
+                        className="story-preview-image"
+                      />
+                    ) : (
+                      <img
+                        src={storyPreview || '/default-placeholder.png'}
+                        alt="preview"
+                        className="story-preview-image"
+                      />
+                    )}
+                    <textarea
+                      className="story-caption-input"
+                      placeholder="Write a caption..."
+                      value={storyCaption}
+                      onChange={e => setStoryCaption(e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              {storyFile && (
+                <div className="upload-story-modal-footer">
+                  <button
+                    className="cancel-button"
+                    onClick={() => {
+                      setStoryFile(null);
+                      setStoryPreview('');
+                      setStoryCaption('');
+                    }}
+                  >
+                    Remove
+                  </button>
+                  <button
+                    className="publish-button"
+                    onClick={uploadStory}
+                    disabled={!storyFile}
+                  >
+                    Publish Story
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         {/* LEFT */}
         <div className="left-side-wrapper">
           <div className="social-buttons-container">
             <ul>
               <li><img src={feedImage} alt="Feed" /><span>Feed</span></li>
               <li>
-                <img src={friendsImage} alt="Friends" /><span>Friends</span></li>
+                <a href="/Advice" className="menu-link">
+                  <img src={friendsImage} alt="Event" />
+                  <span>Advice</span>
+                </a>
+                </li>
               <li>
                 <a href="/CreateGroup" className="menu-link">
                   <img src={eventImage} alt="Event" />
-                  <span>Event</span>
+                  <span>Createe Group</span>
                 </a>
               </li>
               <li onClick={() => setShowUploadStory(prev => !prev)}>
                 <img src={photosImage} alt="Photos" />
-                <span>Photos</span>
+                <span>Upload Story</span>
               </li>
             </ul>
           </div>
-          {showUploadStory && (
-            <div className="upload-story-modal">
-              <div className="upload-story-modal-content">
-                <button className="close-modal" onClick={() => setShowUploadStory(false)}>✖</button>
-                <h4>Upload a Story</h4>
-                <input type="file" accept="image/*,video/*" onChange={handleStoryFileChange} />
-                {storyPreview && (
-                  <div className="story-preview">
-                    {storyFile?.type.startsWith('video') ? (
-                      <video src={storyPreview} controls width={300}></video>
-                    ) : (
-                      <img src={storyPreview} alt="preview" width={300} />
-                    )}
-                  </div>
-                )}
-                <input
-                  type="text"
-                  placeholder="Add a caption..."
-                  value={storyCaption}
-                  onChange={e => setStoryCaption(e.target.value)}
-                />
-                <button onClick={uploadStory} disabled={!storyFile}>Upload Story</button>
-              </div>
-            </div>
-          )}
+
           <div className="pages-you-like-container">
             <h4>Groups</h4>
             <ul>
@@ -675,7 +740,6 @@ const Home: React.FC = () => {
                 </li>
               ))}
             </ul>
-
             <h4>Pending Requests</h4>
             <ul>
               {outgoingRequests.map(req => (
@@ -685,7 +749,6 @@ const Home: React.FC = () => {
                 </li>
               ))}
             </ul>
-
             <button className="requests-close" onClick={() => setShowRequestsModal(false)}>Close</button>
           </div>
         )}

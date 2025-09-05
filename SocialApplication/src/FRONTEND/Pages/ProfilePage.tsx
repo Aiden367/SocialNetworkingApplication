@@ -14,6 +14,7 @@ interface UserProfile {
   lastName?: string;
   email?: string;
   bio?: string;
+  jobTitle?: string; // ADD THIS LINE
   joinDate?: string;
   profilePhoto?: { url?: string; publicId?: string };
   connections?: { _id: string; username?: string }[];
@@ -28,19 +29,20 @@ interface UserProfile {
   }[];
 }
 
-
 const Profile: React.FC = () => {
   const { userId } = useUser();
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [isUploadingProfile, setIsUploadingProfile] = useState(false);
+  const [isGeneratingJobTitle, setIsGeneratingJobTitle] = useState(false); // ADD THIS LINE
+  const [isEditingJobTitle, setIsEditingJobTitle] = useState(false); // ADD THIS LINE
+  const [tempJobTitle, setTempJobTitle] = useState(''); // ADD THIS LINE
 
   // State for profile picture
   const [profileFile, setProfileFile] = useState<File | null>(null);
-
   // State for posts
   const [postFile, setPostFile] = useState<File | null>(null);
   const [caption, setCaption] = useState<string>('');
   const [showPostModal, setShowPostModal] = useState(false);
-
   const [message, setMessage] = useState<string>('');
   const [showPosts, setShowPosts] = useState(false);
   const [showConnections, setShowConnections] = useState(false);
@@ -69,6 +71,8 @@ const Profile: React.FC = () => {
   // PROFILE PHOTO UPLOAD
   const handleProfileUpload = async () => {
     if (!profileFile || !userId) return;
+
+    setIsUploadingProfile(true);
     const formData = new FormData();
     formData.append('profileImage', profileFile);
 
@@ -89,7 +93,74 @@ const Profile: React.FC = () => {
     } catch (err) {
       console.error(err);
       setMessage('Something went wrong while uploading profile photo.');
+    } finally {
+      setIsUploadingProfile(false);
     }
+  };
+
+  // JOB TITLE GENERATION - ADD THESE FUNCTIONS
+  const handleGenerateJobTitle = async () => {
+    if (!userId) return;
+
+    setIsGeneratingJobTitle(true);
+    try {
+      const response = await fetch(`http://localhost:5000/user/${userId}/generate-job-title`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setUserProfile(prev => prev ? { ...prev, jobTitle: data.jobTitle } : prev);
+        setMessage('New job title generated!');
+      } else {
+        setMessage(data.error || 'Failed to generate job title');
+      }
+    } catch (err) {
+      console.error(err);
+      setMessage('Something went wrong while generating job title.');
+    } finally {
+      setIsGeneratingJobTitle(false);
+    }
+  };
+
+  // MANUAL JOB TITLE UPDATE
+  const handleUpdateJobTitle = async () => {
+    if (!userId || !tempJobTitle.trim()) return;
+
+    try {
+      const response = await fetch(`http://localhost:5000/user/${userId}/job-title`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ jobTitle: tempJobTitle.trim() }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setUserProfile(prev => prev ? { ...prev, jobTitle: data.jobTitle } : prev);
+        setMessage('Job title updated successfully!');
+        setIsEditingJobTitle(false);
+        setTempJobTitle('');
+      } else {
+        setMessage(data.error || 'Failed to update job title');
+      }
+    } catch (err) {
+      console.error(err);
+      setMessage('Something went wrong while updating job title.');
+    }
+  };
+
+  const startEditingJobTitle = () => {
+    setTempJobTitle(userProfile?.jobTitle || '');
+    setIsEditingJobTitle(true);
+  };
+
+  const cancelEditingJobTitle = () => {
+    setIsEditingJobTitle(false);
+    setTempJobTitle('');
   };
 
   // CREATE POST
@@ -129,7 +200,7 @@ const Profile: React.FC = () => {
   return (
     <>
       <Navbar />
-      <div className="profile-container">
+      <div className="profile-container-page">
         <div className="profile-card">
           <div className="profile-header">
             <img
@@ -139,22 +210,112 @@ const Profile: React.FC = () => {
             />
             <h2 className="profile-name">{userProfile?.firstName} {userProfile?.lastName}</h2>
             <p className="profile-username">@{userProfile?.username}</p>
+
+            {/* JOB TITLE SECTION - ADD THIS */}
+            <div className="job-title-section">
+              {!isEditingJobTitle ? (
+                <div className="job-title-display">
+                  <h3 className="job-title">
+                    {userProfile?.jobTitle || 'No job title set'}
+                  </h3>
+                  <div className="job-title-buttons">
+                    <button
+                      onClick={handleGenerateJobTitle}
+                      disabled={isGeneratingJobTitle}
+                      className="generate-job-title-btn"
+                    >
+                      {isGeneratingJobTitle ? 'Generating...' : 'Generate Random Title'}
+                    </button>
+                    <button
+                      onClick={startEditingJobTitle}
+                      className="edit-job-title-btn"
+                    >
+                      Edit Title
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="job-title-edit">
+                  <input
+                    type="text"
+                    value={tempJobTitle}
+                    onChange={(e) => setTempJobTitle(e.target.value)}
+                    placeholder="Enter your job title..."
+                    maxLength={100}
+                    className="job-title-input"
+                  />
+                  <div className="job-title-edit-buttons">
+                    <button onClick={handleUpdateJobTitle} className="save-job-title-btn">
+                      Save
+                    </button>
+                    <button onClick={cancelEditingJobTitle} className="cancel-job-title-btn">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="profile-info">
             {userProfile?.bio && <p className="bio">{userProfile.bio}</p>}
-
-            {/* PROFILE UPLOAD */}
             <div className="upload-section">
-              <input type="file" accept="image/*" onChange={e => e.target.files && setProfileFile(e.target.files[0])} />
-              <button onClick={handleProfileUpload}>Update Profile Photo</button>
+              <h3>Update Profile Picture</h3>
+              <div className="file-input-container">
+                <label className={`file-input-button ${profileFile ? 'file-selected' : ''}`}>
+                  <svg fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
+                  </svg>
+                  <span>
+                    {profileFile
+                      ? `${profileFile.name.length > 25 ? profileFile.name.substring(0, 25) + '...' : profileFile.name}`
+                      : 'Choose image file'
+                    }
+                  </span>
+                  {profileFile && (
+                    <div style={{
+                      marginLeft: 'auto',
+                      color: '#00ff7f',
+                      fontSize: '0.8rem',
+                      fontWeight: '600'
+                    }}>
+                      ✓ READY
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      console.log('File selected:', e.target.files?.[0]); // Debug log
+                      if (e.target.files?.[0]) {
+                        setProfileFile(e.target.files[0]);
+                      }
+                    }}
+                    style={{ display: 'none' }}
+                  />
+                </label>
+              </div>
+              {profileFile && (
+                <div className="file-preview">
+                  <span>File loaded: {profileFile.name} ({(profileFile.size / 1024).toFixed(1)}KB)</span>
+                </div>
+              )}
+              <button
+                className={`upload-button ${isUploadingProfile ? 'loading' : ''}`}
+                onClick={() => {
+                  console.log('Upload button clicked, file:', profileFile); // Debug log
+                  handleProfileUpload();
+                }}
+                disabled={!profileFile || isUploadingProfile}
+              >
+                {isUploadingProfile ? 'EXECUTING...' : 'EXECUTE UPLOAD'}
+              </button>
+              {message && (
+                <div className="upload-message">
+                  {message}
+                </div>
+              )}
             </div>
-
-
-
-            {message && <p className="upload-message">{message}</p>}
-
-            {/* POST MODAL */}
             {showPostModal && (
               <div className="modal-overlay">
                 <div className="modal-content">
@@ -170,7 +331,6 @@ const Profile: React.FC = () => {
                 </div>
               </div>
             )}
-
             <div className="profile-buttons-section">
               <button onClick={() => setShowPosts(!showPosts)} className="profile-page-icon-buttons">
                 <img src={postsIcon} alt="Posts" className="button-icon" />
@@ -182,9 +342,7 @@ const Profile: React.FC = () => {
               <button onClick={() => setShowPostModal(true)} className="profile-page-icon-buttons">
                 <img src={createPostIcon} />
               </button>
-
             </div>
-
             {showPosts && userProfile?.posts?.length ? (
               <div className="posts-list">
                 <ul>
@@ -204,7 +362,6 @@ const Profile: React.FC = () => {
                 </ul>
               </div>
             ) : showPosts && <p>No posts found.</p>}
-
 
             {showConnections && userProfile?.connections?.length ? (
               <div className="connections-list">

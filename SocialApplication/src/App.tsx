@@ -6,6 +6,7 @@ import ProfilePage from './FRONTEND/Pages/ProfilePage'
 import LoginPage from './FRONTEND/Pages/LoginPage'
 import CreateGroupPage from './FRONTEND/Pages/CreateGroupPage'
 import GroupPage from './FRONTEND/Pages/GroupPage'
+import AdvicePage from './FRONTEND/Pages/AdvicePage'
 import { UserProvider } from './BACKEND/context/UserContext';
 const App: React.FC = () => {
   return (
@@ -19,6 +20,7 @@ const App: React.FC = () => {
           <Route path="/Login" element={<LoginPage />} />
           <Route path="/CreateGroup" element={<CreateGroupPage />} />
           <Route path="/group/:groupId" element={<GroupPage />} />
+          <Route path="/Advice" element={<AdvicePage/>} />
         </Routes>
       </Router>
     </UserProvider>

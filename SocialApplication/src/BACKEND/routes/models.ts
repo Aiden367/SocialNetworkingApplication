@@ -29,7 +29,7 @@ const ConversationSchema = new Schema({
   participants: [{ type: Schema.Types.ObjectId, ref: 'User', required: true }],
   messages: [MessageSchema],
   lastUpdated: { type: Date, default: Date.now },
-  chatKey: { type: String, required: true, unique: true } // ADD THIS LINE
+  chatKey: { type: String, required: true, unique: true }
 });
 
 // -------------------- Connection --------------------
@@ -48,6 +48,54 @@ const StorySchema = new Schema({
   privacy: { type: String, enum: ['public', 'friends', 'private'], default: 'friends' }
 });
 
+// Updated AdvicePostSchema - Replace the existing one in your models file
+const AdvicePostSchema = new Schema({
+  title: { type: String, required: true, maxlength: 200 },
+  content: { type: String, required: true, maxlength: 2000 },
+  category: { 
+    type: String, 
+    enum: ['career', 'learning', 'projects', 'interview', 'technology', 'freelance', 'startup', 'other'], 
+    required: true 
+  },
+  tags: [{ type: String, maxlength: 30 }],
+  author: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  anonymous: { type: Boolean, default: false },
+  urgency: { type: String, enum: ['low', 'medium', 'high'], default: 'medium' },
+  status: { type: String, enum: ['open', 'resolved', 'closed'], default: 'open' },
+  
+  responses: [{
+    author: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    content: { type: String, required: true, maxlength: 1500 },
+    createdAt: { type: Date, default: Date.now },
+    helpful: [{ type: Schema.Types.ObjectId, ref: 'User' }], // Users who found this helpful
+    verified: { type: Boolean, default: false }, // For expert/verified responses
+    
+    // NEW: Voting system
+    upvotes: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+    downvotes: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+    
+    // NEW: Replies to responses
+    replies: [{
+      author: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+      content: { type: String, required: true, maxlength: 1000 },
+      createdAt: { type: Date, default: Date.now },
+      upvotes: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+      downvotes: [{ type: Schema.Types.ObjectId, ref: 'User' }]
+    }]
+  }],
+  
+  views: { type: Number, default: 0 },
+  followers: [{ type: Schema.Types.ObjectId, ref: 'User' }], // Users following for updates
+  
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+// Add indexes for better performance
+AdvicePostSchema.index({ category: 1, status: 1, createdAt: -1 });
+AdvicePostSchema.index({ author: 1, createdAt: -1 });
+AdvicePostSchema.index({ urgency: -1, createdAt: -1 });
+
 // -------------------- User --------------------
 const UserSchema = new Schema({
   username: { type: String, required: true, unique: true, minlength: 3, maxlength: 30 },
@@ -58,6 +106,7 @@ const UserSchema = new Schema({
   firstName: { type: String, required: true },
   lastName: { type: String, required: true },
   bio: { type: String, maxlength: 500 },
+  jobTitle: { type: String, maxlength: 100 }, // for the hilarious job titles
   profilePhoto: { url: String, publicId: String },
   coverPhoto: { url: String, publicId: String },
 
@@ -106,7 +155,7 @@ const GroupSchema = new Schema({
   coverImage: { url: String, publicId: String },
   members: [GroupMemberSchema],
   invitedUsers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
-  joinRequests: [GroupJoinRequestSchema], // <-- ADD THIS LINE
+  joinRequests: [GroupJoinRequestSchema],
   createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   createdAt: { type: Date, default: Date.now }
 });
@@ -126,11 +175,11 @@ const GroupPostSchema = new Schema({
   }]
 });
 
-
 // -------------------- Models --------------------
 const User = mongoose.model('User', UserSchema);
 const Conversation = mongoose.model('Conversation', ConversationSchema);
 const Group = mongoose.model('Group', GroupSchema);
 const GroupPost = mongoose.model('GroupPost', GroupPostSchema);
+const AdvicePost = mongoose.model('AdvicePost', AdvicePostSchema); // NEW MODEL
 
-module.exports = { User, Conversation, Group, GroupPost };
+module.exports = { User, Conversation, Group, GroupPost, AdvicePost };

@@ -3,17 +3,24 @@ import { useNavigate } from "react-router-dom";
 import Navbar from "../../BACKEND/COMPONENTS/navbar";
 import { useUser } from "../../BACKEND/context/UserContext";
 import "./Styles/CreateGroup.css";
+import feedImage from "../Images/category.png";
+import friendsImage from "../Images/friends.png";
+import eventImage from "../Images/event.png";
+import photosImage from "../Images/gallery.png";
 
 const CreateGroup: React.FC = () => {
   const { userId, token } = useUser();
   const navigate = useNavigate();
-
   const [groupName, setGroupName] = useState("");
   const [groupDescription, setGroupDescription] = useState("");
   const [groupImage, setGroupImage] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-
+  const [showPostForm, setShowPostForm] = useState(false);
+  const [postContent, setPostContent] = useState("");
+  const [postMedia, setPostMedia] = useState<File | null>(null);
+  const [isCreatingPost, setIsCreatingPost] = useState(false);
+  
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     const file = e.target.files[0];
@@ -24,6 +31,7 @@ const CreateGroup: React.FC = () => {
     reader.onload = () => setPreview(reader.result as string);
     reader.readAsDataURL(file);
   };
+  
 
   const handleCreateGroup = async () => {
     if (!groupName || !groupDescription || !token || !userId) {
@@ -71,11 +79,26 @@ const CreateGroup: React.FC = () => {
         <div className="left-side-wrapper-create-group">
           <div className="social-buttons-container-create-group">
             <ul>
-              <li><span>Feed</span></li>
-              <li><span>Friends</span></li>
-              <li><span>Events</span></li>
-              <li><span>Photos</span></li>
-              <li className="active"><span>Create Group</span></li>
+              <li onClick={() => navigate('/')}>
+                <img src={feedImage} alt="Feed" />
+                <span>Feed</span>
+              </li>
+              <li>
+                <img src={friendsImage} alt="Friends" />
+                <span>Friends</span>
+              </li>
+              <li>
+                <img src={eventImage} alt="Events" />
+                <span>Events</span>
+              </li>
+              <li>
+                <img src={photosImage} alt="Photos" />
+                <span>Photos</span>
+              </li>
+              <li className="active">
+                <img src={eventImage} alt="Create Group" />
+                <span>Create Group</span>
+              </li>
             </ul>
           </div>
         </div>
@@ -116,7 +139,7 @@ const CreateGroup: React.FC = () => {
           <h4>Tips for Groups</h4>
           <ul>
             <li>Pick a clear, unique name</li>
-            <li>Add a description so people know what it’s about</li>
+            <li>Add a description so people know what it's about</li>
             <li>Upload an image to make it stand out</li>
           </ul>
         </div>

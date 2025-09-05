@@ -5,6 +5,7 @@ import messageImage from "./CompImages/messenger.png";
 import notificationImage from "./CompImages/bell.png";
 import profileImage from './CompImages/user.png';
 import { useNavigate } from 'react-router-dom';
+
 export default function Navbar() {
 
     interface UserProfile {
@@ -17,12 +18,15 @@ export default function Navbar() {
             url?: string;
             publicId?: string;
         };
-
     }
+    
     const { userId, token, logout } = useUser();
     const [isLoading, setIsLoading] = useState(false);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+    const [messageCount] = useState(3); // Mock notification count
+    const [notificationCount] = useState(7); // Mock notification count
     const navigate = useNavigate();
+    
     // Fetch user profile if logged in
     useEffect(() => {
         if (userId) {
@@ -53,27 +57,40 @@ export default function Navbar() {
             setIsLoading(false);
         }
     };
+    
     const handleLogout = () => {
         logout();
         navigate('/Login');
     };
 
-
     return (
-        <nav className="nav">
-            <a href="/" className="site-title">Liquid Socialisation</a>
+        <nav className={`nav ${isLoading ? 'nav-loading' : ''}`}>
+            <a href="/" className="site-title">
+                DevSocial
+            </a>
             <ul>
                 <li className="active">
-                    <a href="/">Pricing</a>
-                </li>
-                <li>
-                    <a href="/messages">
-                        <img src={messageImage} alt="Messages" className="icon" />
+                    <a href="/">
+                        <span>dashboard</span>
+                        <div className="nav-tooltip">main interface</div>
                     </a>
                 </li>
-                <li>
+                <li style={{ position: 'relative' }}>
+                    <a href="/messages">
+                        <img src={messageImage} alt="Messages" className="icon" />
+                        {messageCount > 0 && (
+                            <span className="notification-badge">{messageCount}</span>
+                        )}
+                        <div className="nav-tooltip">messages.exe</div>
+                    </a>
+                </li>
+                <li style={{ position: 'relative' }}>
                     <a href="/notifications">
                         <img src={notificationImage} alt="Notifications" className="icon" />
+                        {notificationCount > 0 && (
+                            <span className="notification-badge">{notificationCount}</span>
+                        )}
+                        <div className="nav-tooltip">alerts.log</div>
                     </a>
                 </li>
 
@@ -87,9 +104,18 @@ export default function Navbar() {
                                 className="profile-picture"
                             />
                             <div className="dropdown-content">
-                                <a href="/profile">My Profile</a>
-                                <a href="/settings">Settings</a>
-                                <button onClick={handleLogout} className="logout-btn">Logout</button>
+                                <a href="/profile">profile.config</a>
+                                <a href="/settings">settings.json</a>
+                                <a href="/projects">projects/</a>
+                                <a href="/repositories">repositories/</a>
+                                <div style={{ 
+                                    borderTop: '1px solid #30363d', 
+                                    margin: '8px 0',
+                                    opacity: 0.3
+                                }}></div>
+                                <button onClick={handleLogout} className="logout-btn">
+                                    logout
+                                </button>
                             </div>
                         </div>
                     ) : (

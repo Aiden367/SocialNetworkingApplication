@@ -1,64 +1,502 @@
+/* Programmer Theme Register Page */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Source+Code+Pro:wght@300;400;500;600;700&display=swap');
+
+/* ======================
+   Reset and Base Styles
+   ====================== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+}
+
 body {
-    background-image: url('../../Images/plufow-le-studio-aE8Mx8-vQss-unsplash.jpg');
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-    min-height: 100vh;
-    margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100vw;
+  min-height: 100vh;
+  background: #0d1117;
+  background-image: 
+    radial-gradient(circle at 25% 25%, #1a1e2e 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, #2d1b69 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, #0f3460 0%, transparent 50%),
+    linear-gradient(135deg, #0d1117 0%, #161b22 50%, #0d1117 100%);
+  font-family: 'JetBrains Mono', 'Source Code Pro', monospace;
+  color: #f0f6fc;
+  position: relative;
+  padding: 20px;
 }
 
-.register-page-container
-{
- display:flex;
- width:800px;
- height:150%;
- margin-left:625px;
+body::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 98px,
+      rgba(0, 255, 127, 0.02) 100px
+    ),
+    repeating-linear-gradient(
+      180deg,
+      transparent,
+      transparent 98px,
+      rgba(0, 255, 127, 0.02) 100px
+    );
+  pointer-events: none;
+  z-index: 1;
 }
 
-.create-account-container
-{
-    width:60%;
-    height:40%;
-    border-radius: 5px;
-    background-color: White;
-    padding:20px;
+.register-page-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 900px;
+  position: relative;
+  z-index: 2;
 }
 
-
-.create-account-container button {
-    width: 100%;
-    padding: 12px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-size: 16px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: transform 0.2s ease;
+.create-account-container {
+  width: 100%;
+  max-width: 500px;
+  background: rgba(22, 27, 34, 0.95);
+  border-radius: 16px;
+  padding: 40px;
+  box-shadow: 
+    0 20px 40px rgba(0, 0, 0, 0.4),
+    0 0 20px rgba(0, 255, 127, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  border: 2px solid #30363d;
+  backdrop-filter: blur(20px);
+  position: relative;
+  animation: slideIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.create-account-container button:hover {
-    transform: translateY(-2px);
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
+.create-account-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #7c3aed, #00d4ff, #00ff7f, #ff006b);
+  border-radius: 16px 16px 0 0;
+  animation: gradientShift 3s ease-in-out infinite;
+}
+
+@keyframes gradientShift {
+  0%, 100% { 
+    background: linear-gradient(90deg, #7c3aed, #00d4ff, #00ff7f, #ff006b); 
+  }
+  50% { 
+    background: linear-gradient(90deg, #ff006b, #7c3aed, #00d4ff, #00ff7f); 
+  }
+}
+
+.create-account-container::after {
+  content: 'user@system:~$ register --new-user';
+  position: absolute;
+  top: -35px;
+  left: 0;
+  font-size: 14px;
+  color: #00ff7f;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  text-shadow: 0 0 10px rgba(0, 255, 127, 0.5);
+}
+
+.create-account-container form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  position: relative;
+}
+
+.create-account-container h1,
+.create-account-container h2 {
+  color: #00d4ff;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  margin-bottom: 24px;
+  text-align: center;
+  font-size: 24px;
+  position: relative;
+}
+
+.create-account-container h1::before,
+.create-account-container h2::before {
+  content: '// ';
+  color: #7c3aed;
+  font-size: 18px;
+}
+
+.create-account-container h1::after,
+.create-account-container h2::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 2px;
+  background: linear-gradient(90deg, #7c3aed, #00d4ff, #00ff7f);
+  border-radius: 2px;
+}
+
+.register-input-group {
+  position: relative;
+  margin-bottom: 8px;
+}
+
+.register-input-group::before {
+  content: attr(data-field);
+  position: absolute;
+  top: -20px;
+  left: 0;
+  font-size: 11px;
+  color: #00d4ff;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Dynamic field labels */
+.register-input-group:nth-child(1)::before {
+  content: 'const firstName = ';
+}
+
+.register-input-group:nth-child(2)::before {
+  content: 'const lastName = ';
+}
+
+.register-input-group:nth-child(3)::before {
+  content: 'const email = ';
+}
+
+.register-input-group:nth-child(4)::before {
+  content: 'const password = ';
+}
+
+.register-input-group:nth-child(5)::before {
+  content: 'const confirmPassword = ';
+}
 
 .register-input-group input {
-    width: 100%;
-    padding: 12px 16px;
-    margin-bottom: 1rem;
-    margin-left:5px;
-    border: 2px solid #e1e5e9;
-    border-radius: 8px;
-    font-size: 16px;
-    transition: all 0.3s ease;
-    box-sizing: border-box;
+  width: 100%;
+  padding: 16px 20px;
+  background: rgba(13, 17, 23, 0.8);
+  border: 2px solid #30363d;
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: 'Source Code Pro', monospace;
+  color: #f0f6fc;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  box-sizing: border-box;
+  margin-bottom: 0;
+  margin-left: 0;
 }
 
 .register-input-group input:focus {
-    outline: none;
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  outline: none;
+  border-color: #00ff7f;
+  box-shadow: 
+    0 0 0 3px rgba(0, 255, 127, 0.1),
+    0 0 15px rgba(0, 255, 127, 0.2);
+  background: rgba(13, 17, 23, 0.9);
+  transform: translateY(-2px);
 }
 
+.register-input-group input::placeholder {
+  color: #6e7681;
+  font-family: 'Source Code Pro', monospace;
+  font-style: italic;
+}
 
+.register-input-group input::placeholder::before {
+  content: '// ';
+  color: #7c3aed;
+}
+
+.create-account-container button {
+  width: 100%;
+  padding: 16px 24px;
+  background: linear-gradient(135deg, #7c3aed 0%, #00d4ff 50%, #00ff7f 100%);
+  color: #000;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 15px rgba(124, 58, 237, 0.4);
+  margin-top: 16px;
+}
+
+.create-account-container button::before {
+  content: 'EXEC: ';
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.create-account-container button::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.6s ease;
+}
+
+.create-account-container button:hover {
+  background: linear-gradient(135deg, #00ff7f 0%, #00d4ff 50%, #7c3aed 100%);
+  transform: translateY(-3px);
+  box-shadow: 
+    0 8px 25px rgba(124, 58, 237, 0.6),
+    0 0 20px rgba(0, 212, 255, 0.3);
+}
+
+.create-account-container button:hover::after {
+  left: 100%;
+}
+
+.create-account-container button:active {
+  transform: translateY(-1px);
+  transition: transform 0.1s ease;
+}
+
+/* Error and Success Messages */
+.error-message {
+  background: rgba(255, 0, 107, 0.1);
+  border: 1px solid #ff006b;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-top: 16px;
+  color: #ff006b;
+  font-size: 13px;
+  font-family: 'JetBrains Mono', monospace;
+  position: relative;
+  animation: errorShake 0.5s ease-in-out;
+}
+
+.error-message::before {
+  content: 'ERROR: ';
+  font-weight: 700;
+  color: #ff006b;
+}
+
+@keyframes errorShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+.success-message {
+  background: rgba(0, 255, 127, 0.1);
+  border: 1px solid #00ff7f;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-top: 16px;
+  color: #00ff7f;
+  font-size: 13px;
+  font-family: 'JetBrains Mono', monospace;
+  position: relative;
+  animation: successGlow 0.6s ease-in-out;
+}
+
+.success-message::before {
+  content: 'SUCCESS: ';
+  font-weight: 700;
+  color: #00ff7f;
+}
+
+@keyframes successGlow {
+  0% { 
+    box-shadow: 0 0 0 rgba(0, 255, 127, 0.4);
+  }
+  50% { 
+    box-shadow: 0 0 20px rgba(0, 255, 127, 0.4);
+  }
+  100% { 
+    box-shadow: 0 0 0 rgba(0, 255, 127, 0.4);
+  }
+}
+
+/* Login link styling */
+.login-message {
+  text-align: center;
+  margin-top: 24px;
+  font-size: 14px;
+  color: #8b949e;
+  font-family: 'Source Code Pro', monospace;
+  position: relative;
+}
+
+.login-message::before {
+  content: '// ';
+  color: #7c3aed;
+}
+
+.login-link {
+  color: #00d4ff;
+  text-decoration: none;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.login-link::before {
+  content: '→ ';
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.login-link:hover {
+  color: #00ff7f;
+  text-decoration: none;
+  text-shadow: 0 0 8px rgba(0, 255, 127, 0.5);
+}
+
+.login-link:hover::before {
+  opacity: 1;
+}
+
+/* Password strength indicator */
+.password-strength {
+  margin-top: 8px;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.password-strength::before {
+  content: 'STRENGTH: ';
+  color: #7c3aed;
+  font-weight: 600;
+}
+
+.password-strength.weak {
+  color: #ff006b;
+}
+
+.password-strength.medium {
+  color: #ffa500;
+}
+
+.password-strength.strong {
+  color: #00ff7f;
+}
+
+/* Loading state animation */
+.create-account-container button.loading {
+  background: linear-gradient(135deg, #30363d 0%, #30363d 100%);
+  color: #8b949e;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.create-account-container button.loading::before {
+  content: 'LOADING...';
+  animation: loadingDots 1.5s infinite;
+}
+
+@keyframes loadingDots {
+  0%, 20% { content: 'LOADING'; }
+  40% { content: 'LOADING.'; }
+  60% { content: 'LOADING..'; }
+  80%, 100% { content: 'LOADING...'; }
+}
+
+/* Terminal-style decorative elements */
+.create-account-container form::after {
+  content: '';
+  position: absolute;
+  bottom: -30px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #30363d, transparent);
+}
+
+/* Responsive Design */
+@media screen and (max-width: 768px) {
+  body {
+    padding: 16px;
+  }
+  
+  .register-page-container {
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  .create-account-container {
+    padding: 30px 24px;
+    max-width: 100%;
+    width: 100%;
+  }
+  
+  .create-account-container::after {
+    font-size: 12px;
+    top: -30px;
+  }
+  
+  .create-account-container button {
+    padding: 14px 20px;
+    font-size: 14px;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .create-account-container {
+    padding: 24px 20px;
+  }
+  
+  .register-input-group input {
+    padding: 14px 16px;
+    font-size: 13px;
+  }
+  
+  .create-account-container button {
+    padding: 12px 16px;
+    font-size: 13px;
+  }
+  
+  .create-account-container::after {
+    content: 'user@system:~$ register';
+    font-size: 11px;
+  }
+}

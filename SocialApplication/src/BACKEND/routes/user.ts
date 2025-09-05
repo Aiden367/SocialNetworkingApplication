@@ -88,6 +88,46 @@ interface AuthenticatedRequest extends Request {
   file?: Express.Multer.File;
 }
 
+// Hilarious contradictory job title components
+const contradictoryPrefixes = [
+  'Senior Junior', 'Lead Assistant', 'Chief Intern', 'Principal Entry-Level', 
+  'Executive Trainee', 'Director Apprentice', 'VP of Basics', 'Master Beginner',
+  'Expert Novice', 'Advanced Starter', 'Pro Amateur', 'Distinguished Rookie',
+  'Elite Newbie', 'Legendary Intern', 'Guru Student', 'Wizard Padawan'
+];
+
+const absurdSeniorities = [
+  'Senior', 'Junior', 'Lead', 'Assistant', 'Principal', 'Intern', 'Chief',
+  'Trainee', 'Executive', 'Entry-Level', 'Distinguished', 'Apprentice',
+  'Master', 'Beginner', 'Expert', 'Novice', 'Pro', 'Amateur'
+];
+
+const buzzwordyRoles = [
+  'Fullstack', 'Frontend', 'Backend', 'Middleware', 'Sidestack', 'Quarterstack',
+  'No-Stack', 'Anti-Stack', 'Stack Overflow', 'DevOps', 'DevNops', 'NoOps',
+  'AllOps', 'SomeOps', 'MaybeOps', 'Cloud', 'On-Premise', 'Hybrid', 'Quantum',
+  'Blockchain', 'AI/ML', 'Non-AI', 'Pseudo-AI', 'Almost-AI'
+];
+
+const ridiculousJobTypes = [
+  'Engineer', 'Developer', 'Architect', 'Evangelist', 'Ninja', 'Rockstar',
+  'Guru', 'Wizard', 'Unicorn', 'Pirate', 'Jedi', 'Superhero', 'Magician',
+  'Whisperer', 'Tamer', 'Bender', 'Slayer', 'Champion', 'Master', 'Overlord',
+  'Destroyer', 'Creator', 'God', 'Mortal', 'Human', 'Robot', 'Cyborg'
+];
+
+const randomSuffixes = [
+  'II', 'III', 'IV', 'Jr.', 'Sr.', 'PhD', 'MD', 'Esq.', 'CPA', '2.0', '3000',
+  'XL', 'Pro', 'Max', 'Plus', 'Premium', 'Enterprise', 'Deluxe', 'Ultimate',
+  'Extreme', 'Turbo', 'Super', 'Mega', 'Ultra', 'Hyper', 'Neo', 'Alpha', 'Beta'
+];
+
+const technicalNonsense = [
+  'Serverless Server', 'Stateless State', 'Headless Head', 'Wireless Wire',
+  'Paperless Paper', 'Cloudless Cloud', 'Agile Waterfall', 'Secure Vulnerability',
+  'Scalable Bottleneck', 'Simple Complexity', 'Async Sync', 'Frontend Backend',
+  'Left-Handed API', 'Recursive Loop', 'Infinite Finite', 'Legacy Modern'
+];
 
 import rateLimit from 'express-rate-limit';
 const router = Router();
@@ -927,7 +967,140 @@ router.get('/groups/all', authenticateToken, async (req: AuthenticatedRequest, r
   }
 });
 
+// Function to generate hilariously contradictory job titles
+const generateJobTitle = () => {
+  const formats = [
+    // Format 1: Contradictory prefix + role + suffix
+    () => {
+      const prefix = contradictoryPrefixes[Math.floor(Math.random() * contradictoryPrefixes.length)];
+      const role = buzzwordyRoles[Math.floor(Math.random() * buzzwordyRoles.length)];
+      const jobType = ridiculousJobTypes[Math.floor(Math.random() * ridiculousJobTypes.length)];
+      const suffix = randomSuffixes[Math.floor(Math.random() * randomSuffixes.length)];
+      return `${prefix} ${role} ${jobType} ${suffix}`;
+    },
+    
+    // Format 2: Multiple contradictory seniorities
+    () => {
+      const seniority1 = absurdSeniorities[Math.floor(Math.random() * absurdSeniorities.length)];
+      const seniority2 = absurdSeniorities[Math.floor(Math.random() * absurdSeniorities.length)];
+      const role = buzzwordyRoles[Math.floor(Math.random() * buzzwordyRoles.length)];
+      const jobType = ridiculousJobTypes[Math.floor(Math.random() * ridiculousJobTypes.length)];
+      const suffix = randomSuffixes[Math.floor(Math.random() * randomSuffixes.length)];
+      return `${seniority1} ${seniority2} ${role} ${jobType} ${suffix}`;
+    },
+    
+    // Format 3: Technical nonsense + regular title
+    () => {
+      const nonsense = technicalNonsense[Math.floor(Math.random() * technicalNonsense.length)];
+      const jobType = ridiculousJobTypes[Math.floor(Math.random() * ridiculousJobTypes.length)];
+      const suffix = randomSuffixes[Math.floor(Math.random() * randomSuffixes.length)];
+      return `${nonsense} ${jobType} ${suffix}`;
+    },
+    
+    // Format 4: Overly specific nonsense
+    () => {
+      const prefix = absurdSeniorities[Math.floor(Math.random() * absurdSeniorities.length)];
+      const role1 = buzzwordyRoles[Math.floor(Math.random() * buzzwordyRoles.length)];
+      const role2 = buzzwordyRoles[Math.floor(Math.random() * buzzwordyRoles.length)];
+      const jobType = ridiculousJobTypes[Math.floor(Math.random() * ridiculousJobTypes.length)];
+      const suffix = randomSuffixes[Math.floor(Math.random() * randomSuffixes.length)];
+      return `${prefix} ${role1} ${role2} ${jobType} ${suffix}`;
+    },
+    
+    // Format 5: Pure chaos
+    () => {
+      const words = [
+        ...contradictoryPrefixes.flatMap(p => p.split(' ')),
+        ...buzzwordyRoles,
+        ...ridiculousJobTypes,
+        'Quantum', 'Artisanal', 'Organic', 'Gluten-Free', 'Sustainable',
+        'Disrupting', 'Revolutionary', 'Next-Gen', 'Web3', 'Metaverse'
+      ];
+      
+      const wordCount = Math.floor(Math.random() * 3) + 3; // 3-5 words
+      const selectedWords = [];
+      for (let i = 0; i < wordCount; i++) {
+        selectedWords.push(words[Math.floor(Math.random() * words.length)]);
+      }
+      const suffix = randomSuffixes[Math.floor(Math.random() * randomSuffixes.length)];
+      return `${selectedWords.join(' ')} ${suffix}`;
+    }
+  ];
+  
+  const randomFormat = formats[Math.floor(Math.random() * formats.length)];
+  return randomFormat();
+};
 
+// Route to generate and update user's job title
+router.post('/:id/generate-job-title', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    if (!req.user || req.user.id !== id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const newJobTitle = generateJobTitle();
+    
+    const updatedUser = await User.findByIdAndUpdate(
+      id,
+      { jobTitle: newJobTitle },
+      { new: true }
+    ).select('-password');
+
+    if (!updatedUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.status(200).json({
+      message: 'Job title generated successfully!',
+      jobTitle: newJobTitle,
+      user: updatedUser
+    });
+  } catch (error) {
+    console.error('Error generating job title:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Route to manually set job title
+router.put('/:id/job-title', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { jobTitle } = req.body;
+    
+    if (!req.user || req.user.id !== id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    if (!jobTitle || jobTitle.trim().length === 0) {
+      return res.status(400).json({ error: 'Job title cannot be empty' });
+    }
+
+    if (jobTitle.length > 100) {
+      return res.status(400).json({ error: 'Job title too long (max 100 characters)' });
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      id,
+      { jobTitle: jobTitle.trim() },
+      { new: true }
+    ).select('-password');
+
+    if (!updatedUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.status(200).json({
+      message: 'Job title updated successfully!',
+      jobTitle: updatedUser.jobTitle,
+      user: updatedUser
+    });
+  } catch (error) {
+    console.error('Error updating job title:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 
 

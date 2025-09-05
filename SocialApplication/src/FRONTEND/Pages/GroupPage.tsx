@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
 import Navbar from "../../BACKEND/COMPONENTS/navbar";
 import { useUser } from "../../BACKEND/context/UserContext";
@@ -8,21 +8,40 @@ interface Member {
   user: {
     _id: string;
     username: string;
-    profilePhoto?: string;
+    profilePhoto?: { url: string; publicId: string };
   };
   role: string;
 }
 
-interface GroupPost {
+interface Comment {
   _id: string;
-  author: { username: string; profilePhoto?: string };
-  content: string;
-  media?: { url: string; mediaType: string }[];
+  user: {
+    username: string;
+    profilePhoto?: { url: string; publicId: string };
+  };
+  text: string;
   createdAt: string;
 }
 
+interface GroupPost {
+  _id: string;
+  author: {
+    username: string;
+    profilePhoto?: { url: string; publicId: string };
+  };
+  content: string;
+  media?: { url: string; mediaType: string }[];
+  createdAt: string;
+  likes: (string | null)[];
+  comments: Comment[];
+}
+
 interface JoinRequest {
-  user: { _id: string; username: string };
+  user: {
+    _id: string;
+    username: string;
+    profilePhoto?: { url: string; publicId: string };
+  };
   requestedAt?: string;
 }
 
@@ -45,6 +64,13 @@ const GroupPage: React.FC = () => {
   const [requested, setRequested] = useState(false);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<string | null>(null);
+  const [commentInputs, setCommentInputs] = useState<{ [key: string]: string }>({});
+  const [newPostContent, setNewPostContent] = useState("");
+  const [newPostMedia, setNewPostMedia] = useState<File | null>(null);
+
+  // Ref to track scroll position
+  const postsContainerRef = useRef<HTMLDivElement>(null);
+  const [lastPostCount, setLastPostCount] = useState(0);
 
   useEffect(() => {
     const fetchGroup = async () => {
@@ -54,8 +80,8 @@ const GroupPage: React.FC = () => {
         });
         if (!res.ok) throw new Error("Group not found");
         const currentGroup: Group = await res.json();
-        setGroup(currentGroup);
 
+        setGroup(currentGroup);
         setJoined(currentGroup.members.some((m) => m.user._id === userId));
         setRequested(currentGroup.joinRequests.some((r) => r.user._id === userId));
 
@@ -63,7 +89,14 @@ const GroupPage: React.FC = () => {
           headers: { Authorization: `Bearer ${token}` },
         });
         const groupPosts: GroupPost[] = await postsRes.json();
-        setPosts(groupPosts);
+
+        // Sort posts by creation date - newest first
+        const sortedPosts = groupPosts.sort((a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+
+        setPosts(sortedPosts);
+        setLastPostCount(sortedPosts.length);
       } catch (err) {
         console.error(err);
         setStatus("Failed to load group data.");
@@ -75,13 +108,120 @@ const GroupPage: React.FC = () => {
     fetchGroup();
   }, [groupId, userId, token]);
 
+  // LIKE POST
+  const handleLike = async (postId: string) => {
+    try {
+      const res = await fetch(`http://localhost:5000/groups/${groupId}/post/${postId}/like`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+
+      setPosts(posts.map(p =>
+        p._id === postId
+          ? {
+            ...p,
+            likes: data.likedByUser
+              ? [...p.likes, userId]
+              : p.likes.filter((id) => id !== userId),
+          }
+          : p
+      ));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleAddComment = async (postId: string) => {
+    if (!commentInputs[postId]?.trim()) return;
+
+    try {
+      const res = await fetch(
+        `http://localhost:5000/groups/${groupId}/post/${postId}/comment`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ text: commentInputs[postId] }),
+        }
+      );
+
+      const comment = await res.json();
+      if (!comment || !comment._id) return;
+
+      const formattedComment: Comment = {
+        _id: comment._id.toString(),
+        text: comment.text,
+        createdAt: comment.createdAt,
+        user: {
+          username: comment.user?.username || "Unknown",
+          profilePhoto: comment.user?.profilePhoto,
+        },
+      };
+
+      setPosts(posts.map((p) =>
+        p._id === postId ? { ...p, comments: [...p.comments, formattedComment] } : p
+      ));
+
+      setCommentInputs({ ...commentInputs, [postId]: "" });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleCommentChange = (postId: string, value: string) => {
+    setCommentInputs({ ...commentInputs, [postId]: value });
+  };
+
+  // Alternative handleCreatePost function - refetch instead of adding to array
+  const handleCreatePost = async () => {
+    if (!newPostContent.trim() && !newPostMedia) return;
+
+    const formData = new FormData();
+    formData.append("content", newPostContent);
+    if (newPostMedia) formData.append("media", newPostMedia);
+
+    try {
+      const res = await fetch(`http://localhost:5000/groups/${groupId}/post`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      if (!res.ok) throw new Error("Failed to create post");
+
+      // Clear form immediately
+      setNewPostContent("");
+      setNewPostMedia(null);
+      setStatus("Post created successfully!");
+
+      // Refetch posts instead of adding to array
+      const postsRes = await fetch(`http://localhost:5000/groups/${groupId}/posts`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const updatedPosts: GroupPost[] = await postsRes.json();
+
+      // Sort posts by creation date - newest first
+      const sortedPosts = updatedPosts.sort((a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+
+      setPosts(sortedPosts);
+      setTimeout(() => setStatus(null), 3000);
+
+    } catch (err) {
+      console.error(err);
+      setStatus("Failed to create post");
+      setTimeout(() => setStatus(null), 3000);
+    }
+  };
+
   const handleJoinLeave = async () => {
     if (!group) return;
     try {
       let url = "";
       if (joined) url = `http://localhost:5000/groups/${group._id}/leave`;
       else if (!joined && !requested) url = `http://localhost:5000/groups/${group._id}/request`;
-      else return; // pending request, do nothing for now
+      else return;
 
       const res = await fetch(url, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error("Action failed");
@@ -105,10 +245,10 @@ const GroupPage: React.FC = () => {
   const handleAcceptRequest = async (requestUserId: string) => {
     if (!group) return;
     try {
-      const res = await fetch(`http://localhost:5000/groups/${group._id}/accept/${requestUserId}`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(
+        `http://localhost:5000/groups/${group._id}/accept/${requestUserId}`,
+        { method: "POST", headers: { Authorization: `Bearer ${token}` } }
+      );
       if (!res.ok) throw new Error("Failed to accept request");
       const data = await res.json();
       setGroup(data.group);
@@ -134,7 +274,14 @@ const GroupPage: React.FC = () => {
           <ul>
             {group.members.map((m) => (
               <li key={m.user._id}>
-                <img src={m.user.profilePhoto || "/default-avatar.png"} alt={m.user.username} />
+                <img
+                  src={m.user.profilePhoto?.url || "/default-avatar.png"}
+                  alt={m.user.username}
+                  onError={(e) => {
+                    console.log("Member avatar failed to load:", m.user.profilePhoto?.url);
+                    e.currentTarget.src = "/default-avatar.png";
+                  }}
+                />
                 <span>
                   {m.user.username} {m.role === "owner" && "(Owner)"}
                 </span>
@@ -142,26 +289,32 @@ const GroupPage: React.FC = () => {
             ))}
           </ul>
 
-          {/* Owner view: pending requests */}
           {isOwner && group.joinRequests.length > 0 && (
             <>
               <h4>Join Requests</h4>
               <ul>
-                {group.joinRequests.map((r) => (
+                {group.joinRequests.map((r) =>
                   r.user ? (
                     <li key={r.user._id}>
-                      {r.user.username}
+                      <img
+                        src={r.user.profilePhoto?.url || "/default-avatar.png"}
+                        alt={r.user.username}
+                        onError={(e) => {
+                          e.currentTarget.src = "/default-avatar.png";
+                        }}
+                      />
+                      <span>{r.user.username}</span>
                       <button onClick={() => handleAcceptRequest(r.user._id)}>Accept</button>
                     </li>
                   ) : null
-                ))}
+                )}
               </ul>
             </>
           )}
         </div>
 
         {/* CENTER */}
-        <div className="center-group">
+        <div className="center-group" ref={postsContainerRef}>
           <div className="group-header">
             {group.profileImage && <img src={group.profileImage.url} alt={group.name} />}
             <h2>{group.name}</h2>
@@ -172,13 +325,35 @@ const GroupPage: React.FC = () => {
             {status && <p className="status-message">{status}</p>}
           </div>
 
+          {joined && (
+            <div className="create-post">
+              <textarea
+                placeholder="Write something..."
+                value={newPostContent}
+                onChange={(e) => setNewPostContent(e.target.value)}
+              ></textarea>
+              <input type="file" onChange={(e) => setNewPostMedia(e.target.files?.[0] || null)} />
+              <button onClick={handleCreatePost}>Post</button>
+            </div>
+          )}
+
           <div className="group-posts">
-            <h3>Posts</h3>
+            <h3>Recent Posts</h3>
             {posts.length === 0 && <p>No posts yet.</p>}
-            {posts.map((post) => (
-              <div key={post._id} className="group-post">
+            {posts.map((post, index) => (
+              <div
+                key={post._id}
+                className={`group-post ${index === 0 && posts.length > lastPostCount ? 'new-post' : ''}`}
+              >
                 <div className="post-author">
-                  <img src={post.author.profilePhoto || "/default-avatar.png"} alt={post.author.username} />
+                  <img
+                    src={post.author.profilePhoto?.url || "/default-avatar.png"}
+                    alt={post.author.username}
+                    onError={(e) => {
+                      console.log("Post author avatar failed to load:", post.author.profilePhoto?.url);
+                      e.currentTarget.src = "/default-avatar.png";
+                    }}
+                  />
                   <span>{post.author.username}</span>
                   <span className="post-date">{new Date(post.createdAt).toLocaleString()}</span>
                 </div>
@@ -191,6 +366,72 @@ const GroupPage: React.FC = () => {
                       <video key={idx} controls src={m.url}></video>
                     )
                   )}
+                <div className="post-stats">
+                  {post.likes.length > 0 && (
+                    <span className="like-count">❤️ {post.likes.length}</span>
+                  )}
+                  {post.comments.length > 0 && (
+                    <span className="comment-count">{post.comments.length} comment{post.comments.length !== 1 ? 's' : ''}</span>
+                  )}
+                </div>
+                <div className="post-actions">
+                  <button onClick={() => handleLike(post._id)}>
+                    {post.likes.includes(userId) ? "❤️" : "🤍"} {post.likes.length}
+                  </button>
+                </div>
+                <div className="post-comments">
+                  {post.comments.map((comment) => (
+                    <div key={comment._id} className="comment">
+                      <img
+                        src={comment.user.profilePhoto?.url || "/default-avatar.png"}
+                        alt={comment.user.username}
+                        className="comment-avatar"
+                        onError={(e) => {
+                          console.log("Comment avatar failed to load:", comment.user.profilePhoto?.url);
+                          e.currentTarget.src = "/default-avatar.png";
+                        }}
+                      />
+                      <div className="comment-content">
+                        <div className="comment-author">{comment.user.username}</div>
+                        <div className="comment-text">{comment.text}</div>
+                        <div className="comment-date">
+                          {new Date(comment.createdAt).toLocaleDateString()} at {new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {joined && (
+                    <div className="add-comment">
+                      <img
+                        src="/default-avatar.png"
+                        alt="Your avatar"
+                        className="comment-avatar"
+                        onError={(e) => {
+                          e.currentTarget.src = "/default-avatar.png";
+                        }}
+                      />
+                      <div className="comment-input-container">
+                        <input
+                          type="text"
+                          placeholder="Write a comment..."
+                          value={commentInputs[post._id] || ""}
+                          onChange={(e) => handleCommentChange(post._id, e.target.value)}
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter') {
+                              handleAddComment(post._id);
+                            }
+                          }}
+                        />
+                        <button
+                          onClick={() => handleAddComment(post._id)}
+                          disabled={!commentInputs[post._id]?.trim()}
+                        >
+                          Post
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
           </div>

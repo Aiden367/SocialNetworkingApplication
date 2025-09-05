@@ -263,5 +263,76 @@ router.post("/:groupId/accept/:userId", authenticateToken, async (req: Authentic
   }
 });
 
+// =====================
+// ADD COMMENT TO GROUP POST
+// =====================
+router.post("/:groupId/post/:postId/comment", authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { postId, groupId } = req.params;
+    const { text } = req.body;
+
+    if (!text || !text.trim()) {
+      return res.status(400).json({ error: "Comment cannot be empty" });
+    }
+
+    // Fetch the post
+    const post = await GroupPost.findById(postId);
+    if (!post) return res.status(404).json({ error: "Post not found" });
+
+    // Ensure the user is a member of the group
+    const group = await Group.findById(groupId);
+    if (!group?.members.some((m: any) => m.user.toString() === req.user!.id)) {
+      return res.status(403).json({ error: "Must be a member to comment" });
+    }
+
+    // Add the new comment
+    const comment = {
+      user: req.user!.id,
+      text,
+      createdAt: new Date(),
+    };
+    post.comments.push(comment);
+    await post.save();
+
+    // Fetch the newly added comment with populated user info
+    const populatedPost = await GroupPost.findById(postId)
+      .populate("comments.user", "username profilePhoto");
+
+    const newComment = populatedPost!.comments[populatedPost.comments.length - 1];
+
+    // Return populated comment
+    res.status(201).json(newComment);
+  } catch (err) {
+    console.error("Error adding comment:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+
+
+
+// Like or Unlike a post
+router.post("/:groupId/post/:postId/like", authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const post = await GroupPost.findById(req.params.postId);
+    if (!post) return res.status(404).json({ error: "Post not found" });
+
+    const userId = req.user!.id;
+    const index = post.likes.indexOf(userId);
+
+    if (index === -1) {
+      post.likes.push(userId); // Like
+    } else {
+      post.likes.splice(index, 1); // Unlike
+    }
+
+    await post.save();
+    res.status(200).json({ likes: post.likes.length, likedByUser: index === -1 });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 
 module.exports = router;

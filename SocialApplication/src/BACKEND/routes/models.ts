@@ -3,7 +3,7 @@ import mongoose, { Schema } from 'mongoose';
 // -------------------- Media --------------------
 const MediaSchema = new Schema({
   url: { type: String, required: true },
-  mediaType: { type: String, enum: ['image', 'video'], required: true },
+  mediaType: { type: String, enum: ['image', 'video', 'code'], required: true },
   caption: { type: String },
   uploadDate: { type: Date, default: Date.now },
   likes: [{ type: Schema.Types.ObjectId, ref: 'User' }],
@@ -11,8 +11,85 @@ const MediaSchema = new Schema({
     user: { type: Schema.Types.ObjectId, ref: 'User' },
     text: { type: String, required: true },
     createdAt: { type: Date, default: Date.now }
-  }]
+  }],
+  
+  // Fields for code posts
+  code: { type: String },
+  language: { type: String },
+  filename: { type: String },
+  githubUrl: { type: String }
 });
+
+// -------------------- GitHub Integration --------------------
+const GitHubIntegrationSchema = new Schema({
+  user: { type: Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
+  
+  // OAuth data
+  accessToken: { type: String, required: true, select: false },
+  tokenType: { type: String, default: 'bearer' },
+  scope: { type: String },
+  
+  // GitHub profile data (cached for performance)
+  profile: {
+    id: { type: Number, required: true },
+    username: { type: String, required: true },
+    name: { type: String },
+    bio: { type: String },
+    avatarUrl: { type: String },
+    profileUrl: { type: String },
+    publicRepos: { type: Number },
+    followers: { type: Number },
+    following: { type: Number },
+    company: { type: String },
+    location: { type: String },
+    blog: { type: String },
+    twitterUsername: { type: String }
+  },
+  
+  // Cached repositories
+  repositories: [{
+    id: { type: Number, required: true },
+    name: { type: String, required: true },
+    fullName: { type: String, required: true },
+    description: { type: String },
+    language: { type: String },
+    stars: { type: Number, default: 0 },
+    forks: { type: Number, default: 0 },
+    url: { type: String, required: true },
+    isPrivate: { type: Boolean, default: false },
+    updatedAt: { type: Date },
+    pushedAt: { type: Date }
+  }],
+  
+  // Sync metadata
+  lastSyncAt: { type: Date, default: Date.now },
+  profileLastSyncAt: { type: Date, default: Date.now },
+  reposLastSyncAt: { type: Date, default: Date.now },
+  syncErrors: [{ 
+    error: String, 
+    occurredAt: { type: Date, default: Date.now } 
+  }],
+  
+  // Settings
+  settings: {
+    syncFrequency: { type: String, enum: ['manual', 'hourly', 'daily', 'weekly'], default: 'daily' },
+    autoSyncRepos: { type: Boolean, default: true },
+    showPrivateRepos: { type: Boolean, default: false },
+    maxReposToCache: { type: Number, default: 20 }
+  },
+  
+  // Integration status
+  isActive: { type: Boolean, default: true },
+  connectedAt: { type: Date, default: Date.now },
+  lastActiveAt: { type: Date, default: Date.now }
+}, { 
+  timestamps: true
+});
+
+GitHubIntegrationSchema.index({ user: 1 });
+GitHubIntegrationSchema.index({ 'profile.username': 1 });
+GitHubIntegrationSchema.index({ lastSyncAt: 1 });
+GitHubIntegrationSchema.index({ isActive: 1 });
 
 // -------------------- Message --------------------
 const MessageSchema = new Schema({
@@ -48,7 +125,7 @@ const StorySchema = new Schema({
   privacy: { type: String, enum: ['public', 'friends', 'private'], default: 'friends' }
 });
 
-// Updated AdvicePostSchema - Replace the existing one in your models file
+// -------------------- Advice Post --------------------
 const AdvicePostSchema = new Schema({
   title: { type: String, required: true, maxlength: 200 },
   content: { type: String, required: true, maxlength: 2000 },
@@ -67,14 +144,11 @@ const AdvicePostSchema = new Schema({
     author: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     content: { type: String, required: true, maxlength: 1500 },
     createdAt: { type: Date, default: Date.now },
-    helpful: [{ type: Schema.Types.ObjectId, ref: 'User' }], // Users who found this helpful
-    verified: { type: Boolean, default: false }, // For expert/verified responses
-    
-    // NEW: Voting system
+    helpful: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+    verified: { type: Boolean, default: false },
     upvotes: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     downvotes: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     
-    // NEW: Replies to responses
     replies: [{
       author: { type: Schema.Types.ObjectId, ref: 'User', required: true },
       content: { type: String, required: true, maxlength: 1000 },
@@ -85,13 +159,12 @@ const AdvicePostSchema = new Schema({
   }],
   
   views: { type: Number, default: 0 },
-  followers: [{ type: Schema.Types.ObjectId, ref: 'User' }], // Users following for updates
+  followers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
   
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
 
-// Add indexes for better performance
 AdvicePostSchema.index({ category: 1, status: 1, createdAt: -1 });
 AdvicePostSchema.index({ author: 1, createdAt: -1 });
 AdvicePostSchema.index({ urgency: -1, createdAt: -1 });
@@ -106,9 +179,14 @@ const UserSchema = new Schema({
   firstName: { type: String, required: true },
   lastName: { type: String, required: true },
   bio: { type: String, maxlength: 500 },
-  jobTitle: { type: String, maxlength: 100 }, // for the hilarious job titles
+  jobTitle: { type: String, maxlength: 100 },
   profilePhoto: { url: String, publicId: String },
   coverPhoto: { url: String, publicId: String },
+
+  // Integration references
+  integrations: {
+    github: { type: Schema.Types.ObjectId, ref: 'GitHubIntegration' }
+  },
 
   connections: [ConnectionSchema],
   sentRequests: [ConnectionSchema],
@@ -180,6 +258,14 @@ const User = mongoose.model('User', UserSchema);
 const Conversation = mongoose.model('Conversation', ConversationSchema);
 const Group = mongoose.model('Group', GroupSchema);
 const GroupPost = mongoose.model('GroupPost', GroupPostSchema);
-const AdvicePost = mongoose.model('AdvicePost', AdvicePostSchema); // NEW MODEL
+const AdvicePost = mongoose.model('AdvicePost', AdvicePostSchema);
+const GitHubIntegration = mongoose.model('GitHubIntegration', GitHubIntegrationSchema);
 
-module.exports = { User, Conversation, Group, GroupPost, AdvicePost };
+module.exports = { 
+  User, 
+  Conversation, 
+  Group, 
+  GroupPost, 
+  AdvicePost,
+  GitHubIntegration
+};

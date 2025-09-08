@@ -1,5 +1,5 @@
 const bcrypt = require("bcrypt");
-const { User, Conversation, Group } = require('./models');
+const { User, Conversation, Group, GroupPost, AdvicePost, GitHubIntegration } = require('./models');
 const jwt = require("jsonwebtoken");
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
@@ -8,8 +8,53 @@ import bucket from '../gcs';
 import { Router, Request, Response, NextFunction } from "express";
 import multer from 'multer';
 import mongoose from 'mongoose';
+
 const upload = multer({ storage: multer.memoryStorage() });
 
+interface GitHubRepository {
+  id: number;
+  name: string;
+  full_name: string;
+  description: string | null;
+  language: string | null;
+  stargazers_count: number;
+  forks_count: number;
+  html_url: string;
+  private: boolean;
+  updated_at: string | null;  // Changed from string to string | null
+  pushed_at: string | null;   // Changed from string to string | null
+}
+
+
+interface GitHubUser {
+  id: number;
+  login: string;
+  name: string | null;
+  bio: string | null;
+  avatar_url: string;
+  html_url: string;
+  public_repos: number;
+  followers: number;
+  following: number;
+  company: string | null;
+  location: string | null;
+  blog: string | null;
+  twitter_username: string | null;
+}
+
+interface GitHubRepo {
+  id: number;
+  name: string;
+  full_name: string;
+  description: string | null;
+  language: string | null;
+  stargazers_count: number;
+  forks_count: number;
+  html_url: string;
+  private: boolean;
+  updated_at: string | null;
+  pushed_at: string | null;
+}
 
 interface GroupType extends Document {
   _id: string;
@@ -22,6 +67,14 @@ interface GroupType extends Document {
   createdAt: Date;
 }
 
+// Add this interface with your other interfaces
+interface GitHubTokenResponse {
+  access_token?: string;
+  scope?: string;
+  token_type?: string;
+  error?: string;
+  error_description?: string;
+}
 
 interface FriendRequest {
   user: ObjectId | {
@@ -90,7 +143,7 @@ interface AuthenticatedRequest extends Request {
 
 // Hilarious contradictory job title components
 const contradictoryPrefixes = [
-  'Senior Junior', 'Lead Assistant', 'Chief Intern', 'Principal Entry-Level', 
+  'Senior Junior', 'Lead Assistant', 'Chief Intern', 'Principal Entry-Level',
   'Executive Trainee', 'Director Apprentice', 'VP of Basics', 'Master Beginner',
   'Expert Novice', 'Advanced Starter', 'Pro Amateur', 'Distinguished Rookie',
   'Elite Newbie', 'Legendary Intern', 'Guru Student', 'Wizard Padawan'
@@ -313,10 +366,8 @@ router.get('/:id/friend-data', authenticateToken, async (req: AuthenticatedReque
 });
 
 
-// ADD THE GET ENDPOINT HERE
 router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    // Check if the requested user ID matches the authenticated user's ID
     if (req.params.id !== req.user?.id) {
       return res.status(403).send({ error: 'Access denied' });
     }
@@ -326,13 +377,28 @@ router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Res
       return res.status(404).send({ error: 'User not found' });
     }
 
-    res.status(200).send(user);
+    // Manually fetch GitHub integration if it exists
+    let githubIntegration = null;
+    if (user.integrations?.github) {
+      githubIntegration = await GitHubIntegration.findById(user.integrations.github)
+        .select('-accessToken');
+    }
+
+    // Add the populated GitHub integration to the response
+    const userResponse = {
+      ...user.toObject(),
+      integrations: {
+        ...user.integrations,
+        github: githubIntegration
+      }
+    };
+
+    res.status(200).send(userResponse);
   } catch (error) {
     console.error('Error fetching user:', error);
     res.status(500).send({ error: 'Internal server error' });
   }
 });
-
 
 
 router.post('/:id/create-post', authenticateToken, upload.single('image'), async (req: AuthenticatedRequest, res: Response) => {
@@ -978,7 +1044,7 @@ const generateJobTitle = () => {
       const suffix = randomSuffixes[Math.floor(Math.random() * randomSuffixes.length)];
       return `${prefix} ${role} ${jobType} ${suffix}`;
     },
-    
+
     // Format 2: Multiple contradictory seniorities
     () => {
       const seniority1 = absurdSeniorities[Math.floor(Math.random() * absurdSeniorities.length)];
@@ -988,7 +1054,7 @@ const generateJobTitle = () => {
       const suffix = randomSuffixes[Math.floor(Math.random() * randomSuffixes.length)];
       return `${seniority1} ${seniority2} ${role} ${jobType} ${suffix}`;
     },
-    
+
     // Format 3: Technical nonsense + regular title
     () => {
       const nonsense = technicalNonsense[Math.floor(Math.random() * technicalNonsense.length)];
@@ -996,7 +1062,7 @@ const generateJobTitle = () => {
       const suffix = randomSuffixes[Math.floor(Math.random() * randomSuffixes.length)];
       return `${nonsense} ${jobType} ${suffix}`;
     },
-    
+
     // Format 4: Overly specific nonsense
     () => {
       const prefix = absurdSeniorities[Math.floor(Math.random() * absurdSeniorities.length)];
@@ -1006,7 +1072,7 @@ const generateJobTitle = () => {
       const suffix = randomSuffixes[Math.floor(Math.random() * randomSuffixes.length)];
       return `${prefix} ${role1} ${role2} ${jobType} ${suffix}`;
     },
-    
+
     // Format 5: Pure chaos
     () => {
       const words = [
@@ -1016,7 +1082,7 @@ const generateJobTitle = () => {
         'Quantum', 'Artisanal', 'Organic', 'Gluten-Free', 'Sustainable',
         'Disrupting', 'Revolutionary', 'Next-Gen', 'Web3', 'Metaverse'
       ];
-      
+
       const wordCount = Math.floor(Math.random() * 3) + 3; // 3-5 words
       const selectedWords = [];
       for (let i = 0; i < wordCount; i++) {
@@ -1026,7 +1092,7 @@ const generateJobTitle = () => {
       return `${selectedWords.join(' ')} ${suffix}`;
     }
   ];
-  
+
   const randomFormat = formats[Math.floor(Math.random() * formats.length)];
   return randomFormat();
 };
@@ -1035,13 +1101,13 @@ const generateJobTitle = () => {
 router.post('/:id/generate-job-title', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
-    
+
     if (!req.user || req.user.id !== id) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
     const newJobTitle = generateJobTitle();
-    
+
     const updatedUser = await User.findByIdAndUpdate(
       id,
       { jobTitle: newJobTitle },
@@ -1068,7 +1134,7 @@ router.put('/:id/job-title', authenticateToken, async (req: AuthenticatedRequest
   try {
     const { id } = req.params;
     const { jobTitle } = req.body;
-    
+
     if (!req.user || req.user.id !== id) {
       return res.status(403).json({ error: 'Access denied' });
     }
@@ -1103,7 +1169,367 @@ router.put('/:id/job-title', authenticateToken, async (req: AuthenticatedRequest
 });
 
 
+// Add this interface at the top with your other interfaces
+interface GitHubTokenResponse {
+  access_token?: string;
+  scope?: string;
+  token_type?: string;
+  error?: string;
+  error_description?: string;
+}
 
+
+router.post('/auth/github', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { code } = req.body;
+    console.log('=== GITHUB AUTH DEBUG START ===');
+    console.log('1. User ID:', req.user?.id);
+    console.log('2. Code received:', code ? 'YES' : 'NO');
+    console.log('3. Environment check - Client ID:', process.env.GITHUB_CLIENT_ID ? 'SET' : 'NOT SET');
+    console.log('4. Environment check - Client Secret:', process.env.GITHUB_CLIENT_SECRET ? 'SET' : 'NOT SET');
+
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    if (!code) return res.status(400).json({ error: 'No authorization code provided' });
+
+    // Exchange code for access token
+    console.log('5. Exchanging code for access token...');
+    const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        client_id: process.env.GITHUB_CLIENT_ID,
+        client_secret: process.env.GITHUB_CLIENT_SECRET,
+        code,
+      }),
+    });
+
+    const tokenData = await tokenResponse.json() as GitHubTokenResponse;
+    console.log('6. Token response status:', tokenResponse.status);
+    console.log('7. Token data error:', tokenData.error || 'NONE');
+
+    if (tokenData.error) {
+      console.log('ERROR: GitHub token exchange failed:', tokenData.error_description);
+      return res.status(400).json({ error: tokenData.error_description });
+    }
+
+    const { access_token, scope, token_type } = tokenData;
+
+    if (!access_token) {
+      console.log('ERROR: No access token received');
+      return res.status(400).json({ error: 'Failed to obtain access token from GitHub' });
+    }
+
+    console.log('8. Access token received successfully');
+
+    // Fetch GitHub user profile
+    console.log('9. Fetching GitHub user profile...');
+    const userResponse = await fetch('https://api.github.com/user', {
+      headers: {
+        'Authorization': `Bearer ${access_token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'YourApp/1.0'
+      }
+    });
+
+    if (!userResponse.ok) {
+      console.log('ERROR: GitHub user API failed:', userResponse.status);
+      throw new Error(`GitHub API error: ${userResponse.status}`);
+    }
+
+    const githubUser = await userResponse.json() as GitHubUser;
+    console.log('10. GitHub user fetched:', githubUser.login);
+
+    // Fetch user repositories
+    console.log('11. Fetching repositories...');
+    const reposResponse = await fetch('https://api.github.com/user/repos?sort=updated&per_page=10&type=public', {
+      headers: {
+        'Authorization': `Bearer ${access_token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'YourApp/1.0'
+      }
+    });
+
+    if (!reposResponse.ok) {
+      console.log('ERROR: GitHub repos API failed:', reposResponse.status);
+      throw new Error(`GitHub API error: ${reposResponse.status}`);
+    }
+
+    const repos = await reposResponse.json() as GitHubRepo[];
+    console.log('12. Repositories fetched:', repos.length);
+
+    const formattedRepos = repos.map((repo) => ({
+      id: repo.id,
+      name: repo.name,
+      fullName: repo.full_name,
+      description: repo.description,
+      language: repo.language,
+      stars: repo.stargazers_count,
+      forks: repo.forks_count,
+      url: repo.html_url,
+      isPrivate: repo.private,
+      updatedAt: repo.updated_at,
+      pushedAt: repo.pushed_at
+    }));
+
+    console.log('13. Creating GitHub integration document...');
+
+    // Check if GitHubIntegration model is available
+    console.log('14. GitHubIntegration model check:', typeof GitHubIntegration);
+
+    const githubIntegration = await GitHubIntegration.findOneAndUpdate(
+      { user: req.user.id },
+      {
+        user: req.user.id,
+        accessToken: access_token,
+        tokenType: token_type || 'bearer',
+        scope: scope || '',
+        profile: {
+          id: githubUser.id,
+          username: githubUser.login,
+          name: githubUser.name,
+          bio: githubUser.bio,
+          avatarUrl: githubUser.avatar_url,
+          profileUrl: githubUser.html_url,
+          publicRepos: githubUser.public_repos,
+          followers: githubUser.followers,
+          following: githubUser.following,
+          company: githubUser.company,
+          location: githubUser.location,
+          blog: githubUser.blog,
+          twitterUsername: githubUser.twitter_username
+        },
+        repositories: formattedRepos,
+        connectedAt: new Date(),
+        lastActiveAt: new Date(),
+        lastSyncAt: new Date(),
+        profileLastSyncAt: new Date(),
+        reposLastSyncAt: new Date(),
+        isActive: true
+      },
+      { upsert: true, new: true }
+    ).select('-accessToken');
+
+    console.log('15. GitHub integration created/updated:', githubIntegration ? githubIntegration._id : 'FAILED');
+
+    console.log('16. Updating user document...');
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user.id,
+      { 'integrations.github': githubIntegration._id },
+      { new: true }
+    );
+
+    console.log('17. User document updated:', updatedUser ? 'SUCCESS' : 'FAILED');
+    console.log('18. User integrations field:', updatedUser?.integrations);
+
+    console.log('=== GITHUB AUTH DEBUG END ===');
+
+    res.json({
+      success: true,
+      githubProfile: githubIntegration.profile,
+      repositories: githubIntegration.repositories,
+      message: 'GitHub connected successfully'
+    });
+  } catch (error) {
+    console.error('=== GITHUB AUTH ERROR ===');
+    console.error('Error details:', error);
+    res.status(500).json({ error: 'Failed to connect GitHub account' });
+  }
+});
+
+// Get GitHub profile and repositories
+router.get('/:userId/github/profile', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { userId } = req.params;
+
+    if (!req.user || req.user.id !== userId) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const integration = await GitHubIntegration.findOne({ user: userId }).select('-accessToken');
+    if (!integration || !integration.isActive) {
+      return res.status(404).json({ error: 'GitHub not connected' });
+    }
+
+    res.json({
+      profile: integration.profile,
+      repositories: integration.repositories,
+      lastSyncAt: integration.lastSyncAt,
+      settings: integration.settings,
+      isConnected: true
+    });
+  } catch (error) {
+    console.error('Error fetching GitHub profile:', error);
+    res.status(500).json({ error: 'Failed to fetch GitHub profile' });
+  }
+});
+
+// Sync GitHub data manually - replace your existing route
+router.post('/:userId/github/sync', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { userId } = req.params;
+
+    if (!req.user || req.user.id !== userId) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const integration = await GitHubIntegration.findOne({ user: userId }).select('+accessToken');
+    if (!integration || !integration.isActive || !integration.accessToken) {
+      return res.status(404).json({ error: 'GitHub not connected' });
+    }
+
+    // Fetch GitHub user profile
+    const userResponse = await fetch('https://api.github.com/user', {
+      headers: {
+        'Authorization': `Bearer ${integration.accessToken}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'YourApp/1.0'
+      }
+    });
+
+    if (!userResponse.ok) {
+      throw new Error(`GitHub API error: ${userResponse.status}`);
+    }
+
+    const githubUser = await userResponse.json() as GitHubUser;
+
+    // Fetch repositories
+    const maxRepos = integration.settings?.maxReposToCache || 20;
+    const repoType = integration.settings?.showPrivateRepos ? 'all' : 'public';
+
+    const reposResponse = await fetch(`https://api.github.com/user/repos?sort=updated&per_page=${maxRepos}&type=${repoType}`, {
+      headers: {
+        'Authorization': `Bearer ${integration.accessToken}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'YourApp/1.0'
+      }
+    });
+
+    if (!reposResponse.ok) {
+      throw new Error(`GitHub API error: ${reposResponse.status}`);
+    }
+
+    const repos = await reposResponse.json() as GitHubRepo[];
+
+    const formattedRepos = repos.map((repo) => ({
+      id: repo.id,
+      name: repo.name,
+      fullName: repo.full_name,
+      description: repo.description,
+      language: repo.language,
+      stars: repo.stargazers_count,
+      forks: repo.forks_count,
+      url: repo.html_url,
+      isPrivate: repo.private,
+      updatedAt: repo.updated_at,
+      pushedAt: repo.pushed_at
+    }));
+
+    const updatedIntegration = await GitHubIntegration.findByIdAndUpdate(
+      integration._id,
+      {
+        profile: {
+          id: githubUser.id,
+          username: githubUser.login,
+          name: githubUser.name,
+          bio: githubUser.bio,
+          avatarUrl: githubUser.avatar_url,
+          profileUrl: githubUser.html_url,
+          publicRepos: githubUser.public_repos,
+          followers: githubUser.followers,
+          following: githubUser.following,
+          company: githubUser.company,
+          location: githubUser.location,
+          blog: githubUser.blog,
+          twitterUsername: githubUser.twitter_username
+        },
+        repositories: formattedRepos,
+        lastSyncAt: new Date(),
+        profileLastSyncAt: new Date(),
+        reposLastSyncAt: new Date(),
+        lastActiveAt: new Date()
+      },
+      { new: true }
+    ).select('-accessToken');
+
+    res.json({
+      message: 'GitHub data synced successfully',
+      profile: updatedIntegration?.profile,
+      repositories: updatedIntegration?.repositories,
+      lastSyncAt: updatedIntegration?.lastSyncAt
+    });
+  } catch (error) {
+    console.error('Error syncing GitHub data:', error);
+    res.status(500).json({ error: 'Failed to sync GitHub data' });
+  }
+});
+
+// Disconnect GitHub
+router.delete('/:userId/github/disconnect', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { userId } = req.params;
+
+    if (!req.user || req.user.id !== userId) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    await GitHubIntegration.findOneAndDelete({ user: userId });
+
+    await User.findByIdAndUpdate(userId, {
+      $unset: { 'integrations.github': 1 }
+    });
+
+    res.json({ message: 'GitHub disconnected successfully' });
+  } catch (error) {
+    console.error('Error disconnecting GitHub:', error);
+    res.status(500).json({ error: 'Failed to disconnect GitHub' });
+  }
+});
+
+// Create post with GitHub code snippet
+router.post('/:id/create-code-post', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+
+    const userId = req.user.id;
+    if (req.params.id !== userId) return res.status(403).json({ error: 'Access denied' });
+
+    const { code, language, filename, githubUrl, caption } = req.body;
+
+    if (!code || !language) {
+      return res.status(400).json({ error: 'Code and language are required' });
+    }
+
+    const newPost = {
+      url: '',
+      mediaType: 'code' as any,
+      caption: caption || '',
+      uploadDate: new Date(),
+      likes: [],
+      comments: [],
+      code,
+      language,
+      filename: filename || 'code-snippet',
+      githubUrl: githubUrl || ''
+    };
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { $push: { posts: newPost } },
+      { new: true }
+    );
+
+    res.status(200).json({
+      message: 'Code post created successfully',
+      post: updatedUser?.posts[updatedUser.posts.length - 1],
+    });
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
 
 
 

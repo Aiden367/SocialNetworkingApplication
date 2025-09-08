@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect,useRef } from 'react';
 import Navbar from '../../BACKEND/COMPONENTS/navbar';
 import { useUser } from '../../BACKEND/context/UserContext';
 import './Styles/ProfilePage.css';
@@ -6,6 +6,52 @@ import postsIcon from "../Images/category.png";
 import groupConnectionsIcon from "../Images/group.png";
 import createPostIcon from "../Images/more.png";
 
+// ADD THESE NEW INTERFACES
+interface GitHubProfile {
+  id: number;
+  username: string;
+  name?: string;
+  bio?: string;
+  avatarUrl?: string;
+  profileUrl?: string;
+  publicRepos?: number;
+  followers?: number;
+  following?: number;
+  company?: string;
+  location?: string;
+  blog?: string;
+  twitterUsername?: string;
+}
+
+interface GitHubRepo {
+  id: number;
+  name: string;
+  fullName: string;
+  description?: string;
+  language?: string;
+  stars: number;
+  forks: number;
+  url: string;
+  isPrivate: boolean;
+  updatedAt: string;
+  pushedAt: string;
+}
+
+interface GitHubIntegration {
+  _id: string;
+  profile: GitHubProfile;
+  repositories: GitHubRepo[];
+  lastSyncAt: string;
+  settings: {
+    syncFrequency: string;
+    autoSyncRepos: boolean;
+    showPrivateRepos: boolean;
+    maxReposToCache: number;
+  };
+  isActive: boolean;
+}
+
+// UPDATE YOUR EXISTING UserProfile INTERFACE
 interface UserProfile {
   _id: string;
   username: string;
@@ -14,18 +60,27 @@ interface UserProfile {
   lastName?: string;
   email?: string;
   bio?: string;
-  jobTitle?: string; // ADD THIS LINE
+  jobTitle?: string;
   joinDate?: string;
   profilePhoto?: { url?: string; publicId?: string };
   connections?: { _id: string; username?: string }[];
+  // ADD THIS LINE
+  integrations?: {
+    github?: GitHubIntegration;
+  };
   posts?: {
     _id: string;
     url: string;
-    mediaType: 'image' | 'video';
+    mediaType: 'image' | 'video' | 'code'; // ADD 'code' here
     caption?: string;
     uploadDate: string;
     likes: string[];
     comments: { user: string; text: string; createdAt: string }[];
+    // ADD THESE FOR CODE POSTS
+    code?: string;
+    language?: string;
+    filename?: string;
+    githubUrl?: string;
   }[];
 }
 
@@ -33,9 +88,21 @@ const Profile: React.FC = () => {
   const { userId } = useUser();
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
-  const [isGeneratingJobTitle, setIsGeneratingJobTitle] = useState(false); // ADD THIS LINE
-  const [isEditingJobTitle, setIsEditingJobTitle] = useState(false); // ADD THIS LINE
-  const [tempJobTitle, setTempJobTitle] = useState(''); // ADD THIS LINE
+  const [isGeneratingJobTitle, setIsGeneratingJobTitle] = useState(false);
+  const [isEditingJobTitle, setIsEditingJobTitle] = useState(false);
+  const [tempJobTitle, setTempJobTitle] = useState('');
+
+  // ADD THESE NEW STATE VARIABLES FOR GITHUB
+  const [isConnectingGitHub, setIsConnectingGitHub] = useState(false);
+  const [isSyncingGitHub, setIsSyncingGitHub] = useState(false);
+  const [showGitHubRepos, setShowGitHubRepos] = useState(false);
+  const [showCodePostModal, setShowCodePostModal] = useState(false);
+  const [codePostData, setCodePostData] = useState({
+    code: '',
+    language: 'javascript',
+    filename: '',
+    caption: ''
+  });
 
   // State for profile picture
   const [profileFile, setProfileFile] = useState<File | null>(null);
@@ -46,7 +113,7 @@ const Profile: React.FC = () => {
   const [message, setMessage] = useState<string>('');
   const [showPosts, setShowPosts] = useState(false);
   const [showConnections, setShowConnections] = useState(false);
-
+   const callbackProcessed = useRef(false);
   useEffect(() => {
     if (!userId) return;
     const fetchProfile = async () => {
@@ -68,7 +135,172 @@ const Profile: React.FC = () => {
     fetchProfile();
   }, [userId]);
 
-  // PROFILE PHOTO UPLOAD
+  // Updated useEffect
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const state = urlParams.get('state');
+
+    if (code && state === 'github-auth' && !callbackProcessed.current && !isConnectingGitHub) {
+      console.log('Processing GitHub callback...');
+      callbackProcessed.current = true;
+
+      // Clean up URL immediately
+      window.history.replaceState({}, document.title, window.location.pathname);
+
+      handleGitHubCallback(code);
+    }
+  }, []);
+  const connectGitHub = () => {
+    setIsConnectingGitHub(true);
+    const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID; // Changed this line
+    const redirectUri = `${window.location.origin}/profile`;
+    const scope = 'read:user,public_repo';
+    const state = 'github-auth';
+
+    if (!clientId) {
+      setMessage('GitHub client ID not configured');
+      setIsConnectingGitHub(false);
+      return;
+    }
+
+    window.location.href =
+      `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}&state=${state}`;
+  };
+  const handleGitHubCallback = async (code: string) => {
+    try {
+      const response = await fetch('http://localhost:5000/user/auth/github', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({ code }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Refresh the user profile to get the GitHub integration data
+        const profileResponse = await fetch(`http://localhost:5000/user/${userId}`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        });
+
+        if (profileResponse.ok) {
+          const profileData = await profileResponse.json();
+          setUserProfile(profileData);
+          setMessage('GitHub connected successfully!');
+        }
+
+        // Clean up URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else {
+        const errorData = await response.json();
+        setMessage(errorData.error || 'Failed to connect GitHub');
+      }
+    } catch (err) {
+      console.error('Error connecting GitHub:', err);
+      setMessage('Failed to connect GitHub');
+    } finally {
+      setIsConnectingGitHub(false);
+    }
+  };
+
+  const disconnectGitHub = async () => {
+    if (!userId) return;
+
+    try {
+      const response = await fetch(`http://localhost:5000/user/${userId}/github/disconnect`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+
+      if (response.ok) {
+        setUserProfile(prev => prev ? {
+          ...prev,
+          integrations: { ...prev.integrations, github: undefined }
+        } : prev);
+        setMessage('GitHub disconnected successfully!');
+      } else {
+        setMessage('Failed to disconnect GitHub');
+      }
+    } catch (err) {
+      console.error('Error disconnecting GitHub:', err);
+      setMessage('Failed to disconnect GitHub');
+    }
+  };
+
+  const syncGitHub = async () => {
+    if (!userId) return;
+
+    setIsSyncingGitHub(true);
+    try {
+      const response = await fetch(`http://localhost:5000/user/${userId}/github/sync`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Update the user profile with fresh GitHub data
+        setUserProfile(prev => prev ? {
+          ...prev,
+          integrations: {
+            ...prev.integrations,
+            github: prev.integrations?.github ? {
+              ...prev.integrations.github,
+              profile: data.profile,
+              repositories: data.repositories,
+              lastSyncAt: data.lastSyncAt
+            } : undefined
+          }
+        } : prev);
+        setMessage('GitHub data synced successfully!');
+      } else {
+        setMessage('Failed to sync GitHub data');
+      }
+    } catch (err) {
+      console.error('Error syncing GitHub:', err);
+      setMessage('Failed to sync GitHub data');
+    } finally {
+      setIsSyncingGitHub(false);
+    }
+  };
+
+  const createCodePost = async () => {
+    if (!userId || !codePostData.code || !codePostData.language) {
+      setMessage('Code and language are required');
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:5000/user/${userId}/create-code-post`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify(codePostData),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setUserProfile(prev => prev ? {
+          ...prev,
+          posts: [...(prev.posts || []), data.post]
+        } : prev);
+        setMessage('Code post created successfully!');
+        setCodePostData({ code: '', language: 'javascript', filename: '', caption: '' });
+        setShowCodePostModal(false);
+      } else {
+        setMessage(data.error || 'Failed to create code post');
+      }
+    } catch (err) {
+      console.error('Error creating code post:', err);
+      setMessage('Failed to create code post');
+    }
+  };
+
+  // EXISTING FUNCTIONS (keep all your existing functions)
   const handleProfileUpload = async () => {
     if (!profileFile || !userId) return;
 
@@ -98,7 +330,6 @@ const Profile: React.FC = () => {
     }
   };
 
-  // JOB TITLE GENERATION - ADD THESE FUNCTIONS
   const handleGenerateJobTitle = async () => {
     if (!userId) return;
 
@@ -124,7 +355,6 @@ const Profile: React.FC = () => {
     }
   };
 
-  // MANUAL JOB TITLE UPDATE
   const handleUpdateJobTitle = async () => {
     if (!userId || !tempJobTitle.trim()) return;
 
@@ -163,7 +393,6 @@ const Profile: React.FC = () => {
     setTempJobTitle('');
   };
 
-  // CREATE POST
   const handleCreatePost = async () => {
     if (!postFile || !userId) {
       setMessage('Select an image to upload.');
@@ -197,6 +426,10 @@ const Profile: React.FC = () => {
     }
   };
 
+  // GET GITHUB INTEGRATION DATA
+  const githubIntegration = userProfile?.integrations?.github;
+  const isGitHubConnected = !!githubIntegration;
+
   return (
     <>
       <Navbar />
@@ -211,7 +444,7 @@ const Profile: React.FC = () => {
             <h2 className="profile-name">{userProfile?.firstName} {userProfile?.lastName}</h2>
             <p className="profile-username">@{userProfile?.username}</p>
 
-            {/* JOB TITLE SECTION - ADD THIS */}
+            {/* JOB TITLE SECTION */}
             <div className="job-title-section">
               {!isEditingJobTitle ? (
                 <div className="job-title-display">
@@ -255,10 +488,109 @@ const Profile: React.FC = () => {
                 </div>
               )}
             </div>
+
+            {/* ADD GITHUB SECTION HERE */}
+            <div className="github-section">
+              <h3>GitHub Integration</h3>
+
+              {!isGitHubConnected ? (
+                <div className="github-connect">
+                  <p>Connect your GitHub account to showcase your repositories</p>
+                  <button
+                    onClick={connectGitHub}
+                    disabled={isConnectingGitHub}
+                    className="github-connect-btn"
+                  >
+                    {isConnectingGitHub ? 'Connecting...' : '🔗 Connect GitHub'}
+                  </button>
+                </div>
+              ) : (
+                <div className="github-connected">
+                  <div className="github-profile-info">
+                    <div className="github-user-info">
+                      <h4>Connected: @{githubIntegration.profile.username}</h4>
+                      {githubIntegration.profile.name && (
+                        <p>{githubIntegration.profile.name}</p>
+                      )}
+                      <div className="github-stats">
+                        <span>📚 {githubIntegration.profile.publicRepos || 0} repos</span>
+                        <span>👥 {githubIntegration.profile.followers || 0} followers</span>
+                        <span>➡️ {githubIntegration.profile.following || 0} following</span>
+                      </div>
+                      <p className="last-sync">
+                        Last synced: {new Date(githubIntegration.lastSyncAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="github-actions">
+                      <button
+                        onClick={() => setShowGitHubRepos(!showGitHubRepos)}
+                        className="toggle-repos-btn"
+                      >
+                        {showGitHubRepos ? 'Hide' : 'Show'} Repositories
+                      </button>
+                      <button
+                        onClick={syncGitHub}
+                        disabled={isSyncingGitHub}
+                        className="sync-github-btn"
+                      >
+                        {isSyncingGitHub ? 'Syncing...' : 'Sync Data'}
+                      </button>
+                      <button
+                        onClick={() => setShowCodePostModal(true)}
+                        className="create-code-post-btn"
+                      >
+                        Share Code
+                      </button>
+                      <button onClick={disconnectGitHub} className="disconnect-github-btn">
+                        Disconnect
+                      </button>
+                    </div>
+                  </div>
+
+                  {showGitHubRepos && (
+                    <div className="github-repositories">
+                      <h4>Recent Repositories</h4>
+                      {githubIntegration.repositories.length > 0 ? (
+                        <div className="repos-grid">
+                          {githubIntegration.repositories.map(repo => (
+                            <div key={repo.id} className="repo-card">
+                              <div className="repo-header">
+                                <h5>
+                                  <a href={repo.url} target="_blank" rel="noopener noreferrer">
+                                    {repo.name}
+                                  </a>
+                                </h5>
+                                {repo.language && (
+                                  <span className="repo-language">{repo.language}</span>
+                                )}
+                              </div>
+                              {repo.description && (
+                                <p className="repo-description">{repo.description}</p>
+                              )}
+                              <div className="repo-stats">
+                                <span>⭐ {repo.stars}</span>
+                                <span>🍴 {repo.forks}</span>
+                                <span className="repo-updated">
+                                  Updated: {new Date(repo.updatedAt).toLocaleDateString()}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p>No public repositories found</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="profile-info">
             {userProfile?.bio && <p className="bio">{userProfile.bio}</p>}
+
+            {/* EXISTING UPLOAD SECTION */}
             <div className="upload-section">
               <h3>Update Profile Picture</h3>
               <div className="file-input-container">
@@ -286,7 +618,6 @@ const Profile: React.FC = () => {
                     type="file"
                     accept="image/*"
                     onChange={(e) => {
-                      console.log('File selected:', e.target.files?.[0]); // Debug log
                       if (e.target.files?.[0]) {
                         setProfileFile(e.target.files[0]);
                       }
@@ -302,10 +633,7 @@ const Profile: React.FC = () => {
               )}
               <button
                 className={`upload-button ${isUploadingProfile ? 'loading' : ''}`}
-                onClick={() => {
-                  console.log('Upload button clicked, file:', profileFile); // Debug log
-                  handleProfileUpload();
-                }}
+                onClick={handleProfileUpload}
                 disabled={!profileFile || isUploadingProfile}
               >
                 {isUploadingProfile ? 'EXECUTING...' : 'EXECUTE UPLOAD'}
@@ -316,6 +644,8 @@ const Profile: React.FC = () => {
                 </div>
               )}
             </div>
+
+            {/* EXISTING POST MODAL */}
             {showPostModal && (
               <div className="modal-overlay">
                 <div className="modal-content">
@@ -331,6 +661,54 @@ const Profile: React.FC = () => {
                 </div>
               </div>
             )}
+
+            {/* ADD CODE POST MODAL */}
+            {showCodePostModal && (
+              <div className="modal-overlay">
+                <div className="modal-content code-modal">
+                  <h3>Share Code Snippet</h3>
+                  <div className="code-form">
+                    <input
+                      type="text"
+                      placeholder="Filename (optional)"
+                      value={codePostData.filename}
+                      onChange={e => setCodePostData(prev => ({ ...prev, filename: e.target.value }))}
+                    />
+                    <select
+                      value={codePostData.language}
+                      onChange={e => setCodePostData(prev => ({ ...prev, language: e.target.value }))}
+                    >
+                      <option value="javascript">JavaScript</option>
+                      <option value="typescript">TypeScript</option>
+                      <option value="python">Python</option>
+                      <option value="java">Java</option>
+                      <option value="cpp">C++</option>
+                      <option value="html">HTML</option>
+                      <option value="css">CSS</option>
+                      <option value="other">Other</option>
+                    </select>
+                    <textarea
+                      placeholder="Paste your code here..."
+                      value={codePostData.code}
+                      onChange={e => setCodePostData(prev => ({ ...prev, code: e.target.value }))}
+                      rows={10}
+                      className="code-textarea"
+                    />
+                    <textarea
+                      placeholder="Add a description..."
+                      value={codePostData.caption}
+                      onChange={e => setCodePostData(prev => ({ ...prev, caption: e.target.value }))}
+                    />
+                  </div>
+                  <div className="modal-actions">
+                    <button onClick={createCodePost}>Share Code</button>
+                    <button onClick={() => setShowCodePostModal(false)}>Cancel</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* EXISTING BUTTONS SECTION */}
             <div className="profile-buttons-section">
               <button onClick={() => setShowPosts(!showPosts)} className="profile-page-icon-buttons">
                 <img src={postsIcon} alt="Posts" className="button-icon" />
@@ -338,11 +716,12 @@ const Profile: React.FC = () => {
               <button onClick={() => setShowConnections(!showConnections)} className="profile-page-icon-buttons">
                 <img src={groupConnectionsIcon} alt="Groups" />
               </button>
-
               <button onClick={() => setShowPostModal(true)} className="profile-page-icon-buttons">
                 <img src={createPostIcon} />
               </button>
             </div>
+
+            {/* UPDATED POSTS SECTION TO HANDLE CODE POSTS */}
             {showPosts && userProfile?.posts?.length ? (
               <div className="posts-list">
                 <ul>
@@ -356,6 +735,18 @@ const Profile: React.FC = () => {
                           <source src={post.url} type="video/mp4" />
                           Your browser does not support the video tag.
                         </video>
+                      )}
+                      {post.mediaType === 'code' && (
+                        <div className="code-post">
+                          <div className="code-header">
+                            <span className="code-language">{post.language}</span>
+                            {post.filename && <span className="code-filename">{post.filename}</span>}
+                          </div>
+                          <pre className="code-content">
+                            <code>{post.code}</code>
+                          </pre>
+                          {post.caption && <p className="code-caption">{post.caption}</p>}
+                        </div>
                       )}
                     </li>
                   ))}

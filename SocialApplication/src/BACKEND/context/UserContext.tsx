@@ -27,21 +27,21 @@ export const UserProvider: FC<{ children: ReactNode }> = ({ children }) => {
     () => localStorage.getItem('userId')
   );
   const [token, setToken] = useState<string | null>(
-    () => localStorage.getItem('token')
+    () => localStorage.getItem('authToken')  // Changed from 'token' to 'authToken'
   );
 
   const login = (id: string, token: string) => {
     setUserId(id);
     setToken(token);
     localStorage.setItem('userId', id);
-    localStorage.setItem('token', token);
+    localStorage.setItem('authToken', token);  // Changed from 'token' to 'authToken'
   };
 
   const logout = () => {
     setUserId(null);
     setToken(null);
     localStorage.removeItem('userId');
-    localStorage.removeItem('token');
+    localStorage.removeItem('authToken');  // Changed from 'token' to 'authToken'
   };
 
   return (

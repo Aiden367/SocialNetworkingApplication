@@ -1,5 +1,18 @@
 const bcrypt = require("bcrypt");
-const { User, Conversation, Group, GroupPost, AdvicePost, GitHubIntegration } = require('./models');
+const {
+  User,
+  Conversation,
+  Group,
+  GroupPost,
+  AdvicePost,
+  GitHubIntegration,
+  SecurityAlert,
+  ContentReport,
+  FailedLogin,
+  BlockedIP,
+  UserBan,
+  SystemLog
+} = require('./models');
 const jwt = require("jsonwebtoken");
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
@@ -217,6 +230,70 @@ const authenticateToken = (req: AuthenticatedRequest, res: Response, next: NextF
 };
 
 
+// ADD THE SECURITY MIDDLEWARE HERE - AFTER router creation, BEFORE routes
+const securityMonitor = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  const startTime = Date.now();
+
+  // Log the request
+  const originalSend = res.send;
+  res.send = function (data) {
+    // Log after response
+    SystemLog.create({
+      level: 'info',
+      category: 'api',
+      message: `${req.method} ${req.path}`,
+      userId: req.user?.id,
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent'),
+      endpoint: req.path,
+      responseTime: Date.now() - startTime,
+      statusCode: res.statusCode
+    }).catch((err: unknown) => console.error('Logging error:', err));
+
+    return originalSend.call(this, data);
+  };
+
+  // Check for suspicious patterns
+  if (req.user) {
+    const recentRequests = await SystemLog.countDocuments({
+      userId: req.user.id,
+      timestamp: { $gte: new Date(Date.now() - 60 * 1000) }
+    });
+
+    if (recentRequests > 100) {
+      await SecurityAlert.create({
+        type: 'suspicious_activity',
+        severity: 'high',
+        title: 'High API Usage',
+        description: `User ${req.user.username} made ${recentRequests} requests in last minute`,
+        userId: req.user.id,
+        ipAddress: req.ip
+      });
+    }
+  }
+
+  // Check IP-based rate limiting
+  const ipRequests = await SystemLog.countDocuments({
+    ipAddress: req.ip,
+    timestamp: { $gte: new Date(Date.now() - 60 * 1000) }
+  });
+
+  if (ipRequests > 120) {
+    await SecurityAlert.create({
+      type: 'api_abuse',
+      severity: 'critical',
+      title: 'API Rate Limit Exceeded',
+      description: `IP ${req.ip} made ${ipRequests} requests in last minute`,
+      ipAddress: req.ip
+    });
+  }
+
+  next();
+};
+
+// Apply to all routes (ADD THIS RIGHT AFTER THE MIDDLEWARE DEFINITION)
+router.use(securityMonitor);
+
 router.post('/upload-profile', authenticateToken, upload.single('profileImage'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
@@ -259,35 +336,116 @@ router.post('/upload-profile', authenticateToken, upload.single('profileImage'),
 
 
 router.post('/Login', async (req, res) => {
+  const startTime = Date.now();
+
   try {
     const { email, password } = req.body;
+    const ipAddress = req.ip || req.connection.remoteAddress;
+
     const user = await User.findOne({ email });
+
     if (!user) {
+      // Log failed login attempt
+      await FailedLogin.create({
+        email: email,
+        ipAddress: ipAddress,
+        userAgent: req.get('User-Agent'),
+        reason: 'user_not_found',
+        attemptedAt: new Date()
+      });
+
+      // Check for suspicious activity from this IP
+      const recentFailures = await FailedLogin.countDocuments({
+        ipAddress: ipAddress,
+        attemptedAt: { $gte: new Date(Date.now() - 15 * 60 * 1000) }
+      });
+
+      if (recentFailures >= 5) {
+        await SecurityAlert.create({
+          type: 'failed_login',
+          severity: 'high',
+          title: 'Multiple Failed Login Attempts',
+          description: `${recentFailures} failed login attempts from IP ${ipAddress}`,
+          ipAddress: ipAddress,
+          metadata: { attemptCount: recentFailures }
+        });
+      }
+
       res.status(401).send({ error: "Invalid Username or Password" });
       return;
     }
+
     if (user.lockUntil && user.lockUntil > Date.now()) {
       const minutesLeft = Math.ceil((user.lockUntil - Date.now()) / 60000);
-      res.status(423).send({ error: `Account Locked. Try again in ${minutesLeft} minutes.` })
+
+      await SystemLog.create({
+        level: 'warn',
+        category: 'auth',
+        message: `Locked account login attempt: ${user.username}`,
+        userId: user._id,
+        ipAddress: ipAddress,
+        details: { minutesLeft }
+      });
+
+      res.status(423).send({ error: `Account Locked. Try again in ${minutesLeft} minutes.` });
+      return;
     }
+
     const isMatch = await bcrypt.compare(password, user.password);
+
     if (!isMatch) {
       user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
+
+      // Log failed attempt
+      await FailedLogin.create({
+        userId: user._id,
+        email: email,
+        ipAddress: ipAddress,
+        userAgent: req.get('User-Agent'),
+        reason: 'wrong_password',
+        attemptedAt: new Date()
+      });
+
       if (user.failedLoginAttempts >= MAX_LOGIN_ATTEMPTS) {
         user.lockUntil = Date.now() + LOCK_TIME;
+
+        await SecurityAlert.create({
+          type: 'failed_login',
+          severity: 'medium',
+          title: 'Account Locked Due to Failed Attempts',
+          description: `User ${user.username} account locked after ${MAX_LOGIN_ATTEMPTS} failed attempts`,
+          userId: user._id.toString(),
+          ipAddress: ipAddress
+        });
       }
+
       await user.save();
       res.status(401).send({ error: "Invalid username or password" });
+      return;
     }
+
+    // Successful login
     user.failedLoginAttempts = 0;
     user.lockUntil = null;
+    user.lastActive = new Date();
     await user.save();
-    //JWT token for user
+
+    // Log successful login
+    await SystemLog.create({
+      level: 'info',
+      category: 'auth',
+      message: `Successful login: ${user.username}`,
+      userId: user._id,
+      ipAddress: ipAddress,
+      responseTime: Date.now() - startTime
+    });
+
     const token = jwt.sign({
       id: user._id,
       username: user.username,
       role: user.role
     }, process.env.JWT_SECRET, { expiresIn: '1h' });
+
     res.status(200).send({
       token,
       user: {
@@ -298,6 +456,14 @@ router.post('/Login', async (req, res) => {
     });
   } catch (error) {
     console.error("Could not log the user in", error);
+
+    await SystemLog.create({
+      level: 'error',
+      category: 'auth',
+      message: 'Login system error',
+      ipAddress: req.ip
+    });
+
     res.status(500).send({ error: "Internal server error" });
   }
 });
@@ -305,22 +471,46 @@ router.post('/Login', async (req, res) => {
 router.post('/Register', async (req, res) => {
   try {
     const { username, firstName, lastName, email, password, role } = req.body;
+
+    // Log registration attempt
+    await SystemLog.create({
+      level: 'info',
+      category: 'user_action',
+      message: `New user registration: ${username}`,
+      ipAddress: req.ip,
+      details: { email, username }
+    });
+
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
+
     const user = new User({
       username,
       firstName,
       lastName,
       email,
       password: hashedPassword,
-      role: role || "user"
+      role: role || "user",
+      joinDate: new Date(),
+      lastActive: new Date()
     });
-    const savedUser = await user.save()
-    res.status(201).send({ user: savedUser })
+
+    const savedUser = await user.save();
+
+    res.status(201).send({ user: savedUser });
   } catch (error) {
     console.error('Error saving user or creating account', error);
+
+    await SystemLog.create({
+      level: 'error',
+      category: 'user_action',
+      message: 'Registration failed',
+      ipAddress: req.ip,
+    });
+
+    res.status(500).json({ error: 'Registration failed' });
   }
-})
+});
 
 // GET all users (except password)
 router.get('/all', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
@@ -361,6 +551,78 @@ router.get('/:id/friend-data', authenticateToken, async (req: AuthenticatedReque
     res.status(200).json(friend);
   } catch (err) {
     console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/:friendId/profile', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const friendId = req.params.friendId;
+    const currentUserId = req.user?.id;
+
+    if (!currentUserId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Get the current user to check friendship
+    const currentUser = await User.findById(currentUserId).populate('connections.user', '_id');
+    if (!currentUser) {
+      return res.status(404).json({ error: 'Current user not found' });
+    }
+
+    // Find the friend and populate GitHub integration
+    const friend = await User.findById(friendId)
+      .select('-password -email')
+      .populate({
+        path: 'posts.comments.user',
+        select: '_id username profilePhoto'
+      });
+
+    if (!friend) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Manually fetch GitHub integration if it exists (like in your main profile route)
+    let githubIntegration = null;
+    if (friend.integrations?.github) {
+      githubIntegration = await GitHubIntegration.findById(friend.integrations.github)
+        .select('-accessToken'); // Don't send access token
+    }
+
+    // Check if they are friends or if it's the user's own profile
+    const isSelf = currentUserId === friendId;
+    const isFriend = currentUser.connections?.some(
+      (c: any) => c.user._id.toString() === friendId && c.status === 'accepted'
+    );
+
+    if (!isSelf && !isFriend) {
+      // Return limited public info for non-friends
+      return res.status(200).json({
+        _id: friend._id,
+        username: friend.username,
+        firstName: friend.firstName,
+        lastName: friend.lastName,
+        profilePhoto: friend.profilePhoto,
+        jobTitle: friend.jobTitle,
+        posts: [],
+        isFriend: false,
+        isSelf: false
+      });
+    }
+
+    // Return full profile for friends or self, including GitHub data
+    return res.status(200).json({
+      ...friend.toObject(),
+      integrations: {
+        ...friend.integrations,
+        github: githubIntegration // Add the populated GitHub integration
+      },
+      isFriend: isFriend && !isSelf,
+      isSelf: isSelf
+    });
+
+  } catch (err) {
+    console.error('Error fetching friend profile:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1531,7 +1793,50 @@ router.post('/:id/create-code-post', authenticateToken, async (req: Authenticate
   }
 });
 
+// Report content
+router.post('/:userId/report-content', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { contentType, contentId, targetUserId, reportType, reason, description } = req.body;
 
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
 
+    const report = await ContentReport.create({
+      reportType,
+      contentType,
+      contentId,
+      reporterId: req.user.id,
+      targetUserId,
+      reason,
+      description,
+      status: 'pending',
+      priority: reportType === 'violence' || reportType === 'harassment' ? 'high' : 'medium',
+      timestamp: new Date()
+    });
+
+    // Check if this content has multiple reports
+    const reportCount = await ContentReport.countDocuments({
+      contentId,
+      status: { $in: ['pending', 'under_review'] }
+    });
+
+    if (reportCount >= 3) {
+      await SecurityAlert.create({
+        type: 'content_violation',
+        severity: 'medium',
+        title: 'Multiple Content Reports',
+        description: `Content ${contentId} has received ${reportCount} reports`,
+        metadata: { contentId, reportCount }
+      });
+    }
+
+    res.status(201).json({
+      message: 'Content reported successfully',
+      reportId: report._id
+    });
+  } catch (error) {
+    console.error('Error reporting content:', error);
+    res.status(500).json({ error: 'Failed to report content' });
+  }
+});
 
 module.exports = router;

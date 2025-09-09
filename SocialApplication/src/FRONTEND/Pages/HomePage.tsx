@@ -533,7 +533,7 @@ const Home: React.FC = () => {
                   <img src={friendsImage} alt="Event" />
                   <span>Advice</span>
                 </a>
-                </li>
+              </li>
               <li>
                 <a href="/CreateGroup" className="menu-link">
                   <img src={eventImage} alt="Event" />
@@ -684,42 +684,120 @@ const Home: React.FC = () => {
         </div>
 
 
-        {/* RIGHT */}
+        {/* RIGHT SIDEBAR - Updated friends list */}
         <div className="right-side-wrapper">
-          <button className="manage-requests-btn" onClick={() => setShowRequestsModal(true)}>Manage Requests</button>
+          <button className="manage-requests-btn" onClick={() => setShowRequestsModal(true)}>
+            Manage Requests
+          </button>
+
           <div className="friends-list-container">
             <h4>Friends</h4>
             <ul>
               {friends.map(f => (
-                <li key={f._id} onClick={e => { e.preventDefault(); openChatWindow(f); }}>
-                  <img className="friend-avatar" src={f.profilePhoto?.url || '/default-avatar.png'} alt={f.username || 'Unknown'} />
-                  <span>{f.username || 'Unknown'}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="other-users-container">
-            <h4>Recommend Users</h4>
-            <ul>
-              {otherUsers.map(user => (
-                <li key={user._id}>
-                  <img
-                    className="friend-avatar"
-                    src={user.profilePhoto?.url || "/default-avatar.png"}
-                    alt={user.username || "Unknown"}
-                  />
-                  <span>{user.username || "Unknown"}</span>
-                  <button
-                    onClick={() => sendFriendRequest(user._id)}
-                    className="send-request-btn"
+                <li key={f._id} className="friend-list-item">
+                  <div
+                    className="friend-profile-section"
+                    onClick={() => navigate(`/friend/${(f as NormalizedFriend).user}`)}
+                    style={{
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      flex: 1,
+                      padding: '8px',
+                      borderRadius: '6px',
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                   >
-                    Send Invite
+                    <img
+                      className="friend-avatar"
+                      src={f.profilePhoto?.url || '/default-avatar.png'}
+                      alt={f.username || 'Unknown'}
+                    />
+                    <span style={{ marginLeft: '12px', fontWeight: '500' }}>
+                      {f.username || 'Unknown'}
+                    </span>
+                  </div>
+
+                  {/* Chat button - separate from profile click */}
+                  <button
+                    className="chat-friend-btn"
+                    onClick={(e) => {
+                      e.stopPropagation(); // Prevent profile navigation
+                      openChatWindow(f);
+                    }}
+                    title="Chat with this friend"
+                    style={{
+                      background: '#007bff',
+                      color: 'white',
+                      border: 'none',
+                      padding: '6px 10px',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      marginLeft: '10px'
+                    }}
+                  >
+                    💬
                   </button>
                 </li>
               ))}
             </ul>
           </div>
 
+          <div className="other-users-container">
+            <h4>Recommend Users</h4>
+            <ul>
+              {otherUsers.map(user => (
+                <li key={user._id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0' }}>
+                  <div
+                    className="user-profile-section"
+                    onClick={() => navigate(`/friend/${user._id}`)}
+                    style={{
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      flex: 1,
+                      padding: '8px',
+                      borderRadius: '6px',
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    <img
+                      className="friend-avatar"
+                      src={user.profilePhoto?.url || "/default-avatar.png"}
+                      alt={user.username || "Unknown"}
+                    />
+                    <span style={{ marginLeft: '12px', fontWeight: '500' }}>
+                      {user.username || "Unknown"}
+                    </span>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      sendFriendRequest(user._id);
+                    }}
+                    className="send-request-btn"
+                    style={{
+                      background: '#28a745',
+                      color: 'white',
+                      border: 'none',
+                      padding: '6px 12px',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      marginLeft: '10px'
+                    }}
+                  >
+                    Add Friend
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
 
         {/* Requests Modal */}

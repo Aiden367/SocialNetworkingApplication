@@ -462,3 +462,80 @@ body {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+
+/* Admin Navigation Styling */
+.nav .admin-nav {
+  position: relative;
+}
+
+.nav .admin-nav a {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(124, 58, 237, 0.1) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ff6b6b;
+  font-weight: 600;
+}
+
+.nav .admin-nav a::before {
+  content: '# ';
+  color: #ef4444;
+  opacity: 1;
+}
+
+.nav .admin-nav a::after {
+  content: ' [ADMIN]';
+  color: #ef4444;
+  opacity: 1;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.nav .admin-nav a:hover {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(124, 58, 237, 0.2) 100%);
+  border-color: #ef4444;
+  color: #fecaca;
+  box-shadow: 
+    0 0 15px rgba(239, 68, 68, 0.4),
+    0 0 5px rgba(124, 58, 237, 0.2);
+}
+
+/* Admin badge indicator */
+.nav .admin-nav::after {
+  content: "🔐";
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  font-size: 12px;
+  background: linear-gradient(135deg, #ef4444 0%, #7c3aed 100%);
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #0d1117;
+  animation: adminPulse 2s infinite;
+  z-index: 10002;
+}
+
+@keyframes adminPulse {
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+  70% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+/* Admin dropdown link styling */
+.dropdown-content .admin-link {
+  color: #ff6b6b !important;
+  font-weight: 600;
+}
+
+.dropdown-content .admin-link::before {
+  content: '# ';
+  color: #ef4444 !important;
+}
+
+.dropdown-content .admin-link:hover {
+  background: rgba(239, 68, 68, 0.1) !important;
+  box-shadow: inset 3px 0 0 #ef4444 !important;
+}

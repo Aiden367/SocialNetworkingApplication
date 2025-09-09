@@ -19,14 +19,14 @@ export default function Navbar() {
             publicId?: string;
         };
     }
-    
+
     const { userId, token, logout } = useUser();
     const [isLoading, setIsLoading] = useState(false);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [messageCount] = useState(3); // Mock notification count
     const [notificationCount] = useState(7); // Mock notification count
     const navigate = useNavigate();
-    
+
     // Fetch user profile if logged in
     useEffect(() => {
         if (userId) {
@@ -57,11 +57,14 @@ export default function Navbar() {
             setIsLoading(false);
         }
     };
-    
+
     const handleLogout = () => {
         logout();
         navigate('/Login');
     };
+
+    // Check if user is admin
+    const isAdmin = userProfile?.role === 'admin';
 
     return (
         <nav className={`nav ${isLoading ? 'nav-loading' : ''}`}>
@@ -75,6 +78,26 @@ export default function Navbar() {
                         <div className="nav-tooltip">main interface</div>
                     </a>
                 </li>
+                {/* Admin Dashboard - Only show for admin users */}
+                {isAdmin && (
+                    <li className="admin-nav">
+                        <a href="/admin/dashboard">
+                            <span>admin</span>
+                            <div className="nav-tooltip">admin.panel</div>
+                        </a>
+                    </li>
+                )}
+                {isAdmin && (
+                    <>
+                        <div style={{
+                            borderTop: '1px solid #30363d',
+                            margin: '8px 0',
+                            opacity: 0.3
+                        }}></div>
+                        <a href="/admin/dashboard" className="admin-link">admin.panel</a>
+                    </>
+                )}
+
                 <li style={{ position: 'relative' }}>
                     <a href="/messages">
                         <img src={messageImage} alt="Messages" className="icon" />
@@ -108,8 +131,21 @@ export default function Navbar() {
                                 <a href="/settings">settings.json</a>
                                 <a href="/projects">projects/</a>
                                 <a href="/repositories">repositories/</a>
-                                <div style={{ 
-                                    borderTop: '1px solid #30363d', 
+
+                                {/* Admin Dashboard link in dropdown as well (optional) */}
+                                {isAdmin && (
+                                    <>
+                                        <div style={{
+                                            borderTop: '1px solid #30363d',
+                                            margin: '8px 0',
+                                            opacity: 0.3
+                                        }}></div>
+                                        <a href="/admin/dashboard">admin.panel</a>
+                                    </>
+                                )}
+
+                                <div style={{
+                                    borderTop: '1px solid #30363d',
                                     margin: '8px 0',
                                     opacity: 0.3
                                 }}></div>

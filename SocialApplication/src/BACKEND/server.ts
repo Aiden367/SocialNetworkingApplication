@@ -9,6 +9,7 @@ const { User } = require("./routes/models"); // adjust path if needed
 const user = require("./routes/user");
 const groups = require("./routes/groups");
 const advice = require("./routes/advice");
+const adminRoutes = require("./routes/admin-routes");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -156,7 +157,7 @@ app.use("/user", user);
 // Mount group routes
 app.use('/groups', groups);
 app.use('/advice', advice);
-
+app.use("/admin", adminRoutes);
 // ---- Start Server ----
 connectToDatabase()
   .then(() => {

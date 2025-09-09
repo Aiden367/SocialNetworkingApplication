@@ -1,7 +1,7 @@
 // advice.ts - Updated backend routes
 import { Router, Request, Response, NextFunction } from "express";
 import mongoose from "mongoose";
-const { AdvicePost, User } = require('./models');
+const { AdvicePost, User, SystemLog, SecurityAlert } = require('./models');
 const jwt = require("jsonwebtoken");
 
 const router = Router();
@@ -29,6 +29,66 @@ const authenticateToken = (req: AuthenticatedRequest, res: Response, next: NextF
   });
 };
 
+// ADD THE SECURITY MIDDLEWARE HERE - AFTER router creation, BEFORE routes
+const securityMonitor = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  const startTime = Date.now();
+
+  // Log the request
+  const originalSend = res.send;
+  res.send = function (data) {
+    // Log after response
+    SystemLog.create({
+      level: 'info',
+      category: 'api',
+      message: `${req.method} ${req.path}`,
+      userId: req.user?.id,
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent'),
+      endpoint: req.path,
+      responseTime: Date.now() - startTime,
+      statusCode: res.statusCode
+    }).catch((err: unknown) => console.error('Logging error:', err));
+
+    return originalSend.call(this, data);
+  };
+
+  // Check for suspicious patterns
+  if (req.user) {
+    const recentRequests = await SystemLog.countDocuments({
+      userId: req.user.id,
+      timestamp: { $gte: new Date(Date.now() - 60 * 1000) }
+    });
+
+    if (recentRequests > 100) {
+      await SecurityAlert.create({
+        type: 'suspicious_activity',
+        severity: 'high',
+        title: 'High API Usage',
+        description: `User ${req.user.username} made ${recentRequests} requests in last minute`,
+        userId: req.user.id,
+        ipAddress: req.ip
+      });
+    }
+  }
+
+  // Check IP-based rate limiting
+  const ipRequests = await SystemLog.countDocuments({
+    ipAddress: req.ip,
+    timestamp: { $gte: new Date(Date.now() - 60 * 1000) }
+  });
+
+  if (ipRequests > 120) {
+    await SecurityAlert.create({
+      type: 'api_abuse',
+      severity: 'critical',
+      title: 'API Rate Limit Exceeded',
+      description: `IP ${req.ip} made ${ipRequests} requests in last minute`,
+      ipAddress: req.ip
+    });
+  }
+
+  next();
+};
 // =====================
 // CREATE ADVICE POST
 // =====================

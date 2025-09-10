@@ -22,7 +22,7 @@ import {
   XCircle,
   Clock,
   BarChart3,
-  GitBranch,
+  GitBranch, 
   Ban,
   Flag,
   ShieldAlert,
@@ -821,7 +821,7 @@ const AdminDashboard: React.FC = () => {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="dashboard-main">
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center">
               <Shield className="w-8 h-8 text-blue-600 mr-3" />
@@ -927,7 +927,7 @@ const AdminDashboard: React.FC = () => {
           <div className="space-y-8">
             {/* Stats Grid */}
             {stats && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="stats-row">
                 <StatCard
                   icon={Users}
                   title="Total Users"
@@ -961,7 +961,7 @@ const AdminDashboard: React.FC = () => {
 
             {/* Security Overview */}
             {securityStats && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+             <div className="stats-row">
                 <StatCard
                   icon={ShieldAlert}
                   title="Security Alerts"
@@ -999,7 +999,7 @@ const AdminDashboard: React.FC = () => {
                   <Monitor className="w-5 h-5 mr-2" />
                   System Health
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="stats-row">
                   <div className="text-center">
                     <div className={`text-2xl font-bold ${getHealthColor('', systemHealth.cpuUsage)}`}>
                       {systemHealth.cpuUsage}%
@@ -1030,7 +1030,7 @@ const AdminDashboard: React.FC = () => {
 
             {/* Charts with Recharts */}
             {activityData && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="stats-row">
                 {/* Area Chart */}
                 <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                   <div className="flex items-center justify-between mb-4">
@@ -1478,7 +1478,7 @@ const AdminDashboard: React.FC = () => {
           <div className="space-y-6">
             {/* System Overview */}
             {systemHealth && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="stats-row">
                 <StatCard
                   icon={Cpu}
                   title="CPU Usage"
@@ -1511,7 +1511,7 @@ const AdminDashboard: React.FC = () => {
 
             {/* Detailed System Health */}
             {systemHealth && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="stats-row">
                 {/* Database Health */}
                 <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                   <div className="flex items-center justify-between mb-4">

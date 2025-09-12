@@ -11,7 +11,7 @@ body {
   background: #0d1117;
 }
 
-/* Navbar wrapper - FIXED */
+/* Navbar wrapper */
 .nav {
   background: linear-gradient(135deg, rgba(22, 27, 34, 0.95) 0%, rgba(13, 17, 23, 0.95) 100%);
   backdrop-filter: blur(20px);
@@ -26,13 +26,13 @@ body {
   top: 0;
   left: 0;
   padding: 0 24px;
-  z-index: 10000; /* INCREASED from 1000 to 10000 */
+  z-index: 10000;
   border-bottom: 2px solid #30363d;
   box-shadow: 
     0 4px 20px rgba(0, 0, 0, 0.4),
     0 0 20px rgba(0, 255, 127, 0.1);
   font-family: 'JetBrains Mono', monospace;
-  will-change: transform; /* ADDED: Prevent layout shifts */
+  will-change: transform;
 }
 
 .nav::before {
@@ -182,6 +182,7 @@ body {
   border: 2px solid #30363d;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   filter: brightness(0.9) contrast(1.1);
+  user-select: none;
 }
 
 .profile-picture:hover {
@@ -193,30 +194,54 @@ body {
   filter: brightness(1) contrast(1.1);
 }
 
-/* Profile dropdown - FIXED */
+/* Profile dropdown container */
 .profile-dropdown {
   position: relative;
   display: inline-block;
 }
 
+/* Active state when dropdown is open */
+.profile-dropdown.dropdown-open .profile-picture {
+  border: 2px solid #00ff7f !important;
+  box-shadow: 
+    0 0 20px rgba(0, 255, 127, 0.4),
+    0 0 0 1px rgba(0, 255, 127, 0.2) !important;
+  transform: scale(1.05) !important;
+  filter: brightness(1) contrast(1.1) !important;
+}
+
+/* Dropdown content - FIXED */
 .dropdown-content {
-  display: none;
   position: absolute;
   right: 0;
   top: 60px;
-  background: rgba(22, 27, 34, 0.95);
+  background: rgba(22, 27, 34, 0.98);
   backdrop-filter: blur(20px);
   min-width: 200px;
   box-shadow: 
-    0 8px 32px rgba(0, 0, 0, 0.4),
-    0 0 20px rgba(0, 255, 127, 0.1),
+    0 8px 32px rgba(0, 0, 0, 0.6),
+    0 0 20px rgba(0, 255, 127, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
   border: 2px solid #30363d;
   border-radius: 12px;
   overflow: hidden;
-  animation: terminalSlideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   font-family: 'JetBrains Mono', monospace;
-  z-index: 10001; /* ADDED: Ensure dropdown stays above everything */
+  z-index: 10001;
+  
+  /* CRITICAL: Hidden by default */
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px) scale(0.95);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+
+/* CRITICAL: Show dropdown when it has the 'show' class */
+.dropdown-content.show {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+  pointer-events: all;
 }
 
 .dropdown-content::before {
@@ -229,17 +254,7 @@ body {
   background: linear-gradient(90deg, transparent, #00ff7f, transparent);
 }
 
-@keyframes terminalSlideDown {
-  from { 
-    opacity: 0; 
-    transform: translateY(-10px) scale(0.95);
-  }
-  to { 
-    opacity: 1; 
-    transform: translateY(0) scale(1);
-  }
-}
-
+/* Dropdown items */
 .dropdown-content a,
 .logout-btn {
   color: #8b949e;
@@ -267,7 +282,7 @@ body {
 
 .dropdown-content a:hover,
 .logout-btn:hover {
-  background: rgba(0, 255, 127, 0.1);
+  background: rgba(0, 255, 127, 0.15);
   color: #f0f6fc;
   padding-left: 20px;
   box-shadow: inset 3px 0 0 #00ff7f;
@@ -278,8 +293,11 @@ body {
   content: '$ exit ';
 }
 
-.profile-dropdown:hover .dropdown-content {
-  display: block;
+/* Dropdown divider */
+.dropdown-divider {
+  border-top: 1px solid #30363d;
+  margin: 8px 0;
+  opacity: 0.3;
 }
 
 /* Login button styling */
@@ -328,7 +346,7 @@ body {
   left: 100%;
 }
 
-/* Terminal notification badges - FIXED */
+/* Notification badges */
 .notification-badge {
   position: absolute;
   top: -5px;
@@ -346,7 +364,7 @@ body {
   font-family: 'JetBrains Mono', monospace;
   border: 2px solid #0d1117;
   animation: pulse 2s infinite;
-  z-index: 10002; /* ADDED: Ensure badges stay visible */
+  z-index: 10002;
 }
 
 @keyframes pulse {
@@ -355,7 +373,7 @@ body {
   100% { box-shadow: 0 0 0 0 rgba(255, 0, 107, 0); }
 }
 
-/* Code-style tooltips - FIXED */
+/* Tooltips */
 .nav-tooltip {
   position: absolute;
   bottom: -35px;
@@ -373,7 +391,7 @@ body {
   transition: opacity 0.3s ease;
   border: 1px solid #30363d;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  z-index: 10003; /* ADDED: Ensure tooltips stay visible */
+  z-index: 10003;
 }
 
 .nav-tooltip::before {
@@ -384,85 +402,6 @@ body {
 .nav li:hover .nav-tooltip {
   opacity: 1;
 }
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .nav ul {
-    gap: 1rem;
-  }
-  
-  .nav .site-title {
-    font-size: 1.1rem;
-  }
-
-  .profile-picture {
-    width: 40px;
-    height: 40px;
-  }
-
-  .nav a {
-    font-size: 12px;
-    padding: 6px 10px;
-  }
-
-  .login-button {
-    padding: 8px 16px;
-    font-size: 11px;
-  }
-
-  .dropdown-content {
-    min-width: 160px;
-    top: 55px;
-  }
-}
-
-@media (max-width: 480px) {
-  .nav {
-    padding: 0 16px;
-  }
-
-  .nav .site-title {
-    font-size: 1rem;
-  }
-
-  .nav ul {
-    gap: 0.8rem;
-  }
-
-  .profile-picture {
-    width: 35px;
-    height: 35px;
-  }
-
-  .nav img.icon {
-    width: 20px;
-    height: 20px;
-  }
-}
-
-/* Loading states */
-.nav-loading {
-  opacity: 0.7;
-  pointer-events: none;
-}
-
-.nav-loading::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  right: 20px;
-  width: 12px;
-  height: 12px;
-  border: 2px solid rgba(0, 255, 127, 0.3);
-  border-top-color: #00ff7f;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 
 /* Admin Navigation Styling */
 .nav .admin-nav {
@@ -536,6 +475,84 @@ body {
 }
 
 .dropdown-content .admin-link:hover {
-  background: rgba(239, 68, 68, 0.1) !important;
+  background: rgba(239, 68, 68, 0.15) !important;
   box-shadow: inset 3px 0 0 #ef4444 !important;
+}
+
+/* Loading states */
+.nav-loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.nav-loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 20px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(0, 255, 127, 0.3);
+  border-top-color: #00ff7f;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .nav ul {
+    gap: 1rem;
+  }
+  
+  .nav .site-title {
+    font-size: 1.1rem;
+  }
+
+  .profile-picture {
+    width: 40px;
+    height: 40px;
+  }
+
+  .nav a {
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+
+  .login-button {
+    padding: 8px 16px;
+    font-size: 11px;
+  }
+
+  .dropdown-content {
+    min-width: 160px;
+    top: 55px;
+  }
+}
+
+@media (max-width: 480px) {
+  .nav {
+    padding: 0 16px;
+  }
+
+  .nav .site-title {
+    font-size: 1rem;
+  }
+
+  .nav ul {
+    gap: 0.8rem;
+  }
+
+  .profile-picture {
+    width: 35px;
+    height: 35px;
+  }
+
+  .nav img.icon {
+    width: 20px;
+    height: 20px;
+  }
 }

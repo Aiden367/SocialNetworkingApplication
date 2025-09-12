@@ -24,19 +24,6 @@ import mongoose from 'mongoose';
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-interface GitHubRepository {
-  id: number;
-  name: string;
-  full_name: string;
-  description: string | null;
-  language: string | null;
-  stargazers_count: number;
-  forks_count: number;
-  html_url: string;
-  private: boolean;
-  updated_at: string | null;  // Changed from string to string | null
-  pushed_at: string | null;   // Changed from string to string | null
-}
 
 
 interface GitHubUser {
@@ -68,7 +55,31 @@ interface GitHubRepo {
   updated_at: string | null;
   pushed_at: string | null;
 }
+interface PopulatedMessage {
+  _id: string;
+  content: string;
+  sender: {
+    _id: string;
+    username: string;
+    profilePhoto?: { url: string; publicId?: string };
+  };
+  recipient: {
+    _id: string;
+    username: string;
+    profilePhoto?: { url: string; publicId?: string };
+  };
+  timestamp: Date;
+  read: boolean;
+  attachments: any[];
+}
 
+interface PopulatedConversation {
+  _id: string;
+  participants: string[];
+  messages: PopulatedMessage[];
+  lastUpdated: Date;
+  chatKey: string;
+}
 interface GroupType extends Document {
   _id: string;
   name: string;
@@ -735,6 +746,7 @@ router.get('/by-username/:username', authenticateToken, async (req: Authenticate
   }
 });
 
+// UPDATED ROUTE 2: Get Conversation
 router.get('/:userId/conversation/:recipientId', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { userId, recipientId } = req.params;
@@ -752,22 +764,45 @@ router.get('/:userId/conversation/:recipientId', authenticateToken, async (req: 
     const chatKey = participantIds.join('_');
 
     // Find existing conversation
-    let conversation = await Conversation.findOne({ chatKey })
-      .populate('messages.sender', 'username profilePhoto')
-      .populate('messages.recipient', 'username profilePhoto');
+    let conversation = await Conversation.findOne({ chatKey });
 
-    // Create an empty conversation if none exists
+    // If no conversation exists, create an empty one
     if (!conversation) {
       conversation = new Conversation({
-        participants: participantIds,
+        participants: participantIds.map(id => new mongoose.Types.ObjectId(id)),
         messages: [],
         lastUpdated: new Date(),
         chatKey,
       });
       await conversation.save();
+      
+      // Return empty conversation
+      return res.status(200).json({ 
+        messages: [], 
+        conversationId: conversation._id 
+      });
     }
 
-    res.status(200).json({ messages: conversation.messages, conversationId: conversation._id });
+    // Populate the messages manually since nested population can be tricky
+    await conversation.populate([
+      { path: 'messages.sender', select: 'username profilePhoto' },
+      { path: 'messages.recipient', select: 'username profilePhoto' }
+    ]);
+
+    // Transform messages to match frontend expectations
+    const transformedMessages = conversation.messages.map((msg: PopulatedMessage) => ({
+      _id: msg._id,
+      content: msg.content,
+      sender: msg.sender,
+      recipient: msg.recipient,
+      timestamp: msg.timestamp,
+      read: msg.read
+    }));
+
+    res.status(200).json({ 
+      messages: transformedMessages, 
+      conversationId: conversation._id 
+    });
 
   } catch (err) {
     console.error('Error fetching conversation:', err);
@@ -1001,7 +1036,7 @@ router.get('/:id/others', authenticateToken, async (req: AuthenticatedRequest, r
   }
 });
 
-// GET all conversations for a user
+// UPDATED ROUTE 3: Get All Conversations (for the chat sidebar)
 router.get('/:id/conversations', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -1011,31 +1046,38 @@ router.get('/:id/conversations', authenticateToken, async (req: AuthenticatedReq
     }
 
     // Fetch all conversations that include this user
-    const conversations = await Conversation.find({ participants: id })
-      .populate('participants', 'username profilePhoto')
-      .populate('messages.sender', 'username profilePhoto')
-      .populate('messages.recipient', 'username profilePhoto')
-      .sort({ lastUpdated: -1 }); // newest first
+    const conversations = await Conversation.find({ 
+      participants: new mongoose.Types.ObjectId(id) 
+    })
+    .populate('participants', 'username profilePhoto')
+    .populate('messages.sender', 'username profilePhoto')
+    .populate('messages.recipient', 'username profilePhoto')
+    .sort({ lastUpdated: -1 }); // newest first
 
     // Map conversations to chat summaries
-    const chats = conversations.map((conversation: ConversationType) => {
+    const chats = conversations.map((conversation: any) => {
       const lastMessage = conversation.messages[conversation.messages.length - 1] || null;
 
       // The friend is the participant who is not the current user
-      const friend = conversation.participants.find(p => p._id.toString() !== id.toString());
+      const friend = conversation.participants.find((p: any) => 
+        p._id.toString() !== id.toString()
+      );
 
       return {
         conversationId: conversation._id,
-        friend: friend
-          ? { _id: friend._id, username: friend.username, profilePhoto: friend.profilePhoto }
-          : null,
-        lastMessage: lastMessage
-          ? {
-            ...lastMessage,
-            sender: lastMessage.sender,
-            recipient: lastMessage.recipient
-          }
-          : null,
+        friend: friend ? { 
+          _id: friend._id, 
+          username: friend.username, 
+          profilePhoto: friend.profilePhoto 
+        } : null,
+        lastMessage: lastMessage ? {
+          _id: lastMessage._id,
+          content: lastMessage.content,
+          sender: lastMessage.sender,
+          recipient: lastMessage.recipient,
+          timestamp: lastMessage.timestamp,
+          read: lastMessage.read
+        } : null,
       };
     });
 
@@ -1045,7 +1087,6 @@ router.get('/:id/conversations', authenticateToken, async (req: AuthenticatedReq
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-
 
 
 
@@ -1192,6 +1233,7 @@ router.get('/:id/stories', authenticateToken, async (req: AuthenticatedRequest, 
 });
 
 
+// UPDATED ROUTE 1: Send Message
 router.post('/:senderId/message/:recipientId', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { senderId, recipientId } = req.params;
@@ -1211,14 +1253,20 @@ router.post('/:senderId/message/:recipientId', authenticateToken, async (req: Au
     const participantIds = [senderObjectId.toString(), recipientObjectId.toString()].sort();
     const chatKey = participantIds.join('_');
 
-    // Only find existing conversation — do NOT create
-    const conversation = await Conversation.findOne({ chatKey });
+    // Find existing conversation OR create new one
+    let conversation = await Conversation.findOne({ chatKey });
+    
     if (!conversation) {
-      return res.status(404).json({ error: 'Conversation does not exist. Open chat first.' });
+      conversation = new Conversation({
+        participants: participantIds.map(id => new mongoose.Types.ObjectId(id)),
+        messages: [],
+        lastUpdated: new Date(),
+        chatKey,
+      });
     }
 
     const newMessage = {
-      content,
+      content: content.trim(),
       sender: senderObjectId,
       recipient: recipientObjectId,
       timestamp: new Date(),
@@ -1230,19 +1278,29 @@ router.post('/:senderId/message/:recipientId', authenticateToken, async (req: Au
     conversation.lastUpdated = new Date();
     await conversation.save();
 
+    // Populate the sender and recipient data for the response
     await conversation.populate([
       { path: 'messages.sender', select: 'username profilePhoto' },
       { path: 'messages.recipient', select: 'username profilePhoto' },
     ]);
 
-    res.status(201).json(conversation.messages[conversation.messages.length - 1]);
+    // Return the newly created message with populated data
+    const savedMessage = conversation.messages[conversation.messages.length - 1];
+    
+    res.status(201).json({
+      _id: savedMessage._id,
+      content: savedMessage.content,
+      sender: savedMessage.sender,
+      recipient: savedMessage.recipient,
+      timestamp: savedMessage.timestamp,
+      read: savedMessage.read
+    });
 
   } catch (err) {
     console.error('Error sending message:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-
 
 
 // GET all groups (no filtering)

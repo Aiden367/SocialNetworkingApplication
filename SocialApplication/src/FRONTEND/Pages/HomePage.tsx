@@ -11,13 +11,17 @@ import commentPostImage from "../Images/code.png";
 import { useNavigate } from 'react-router-dom';
 import { ChatWebSocket, WebSocketMessage } from '../../BACKEND/websocket';
 
+// Update your DisplayMessage interface to better match backend response:
 interface DisplayMessage {
+  _id?: string;  // Add this field
   type: 'message' | 'system';
-  sender?: string;
+  sender?: string | { _id: string; username: string; profilePhoto?: { url: string } };
+  recipient?: string | { _id: string; username: string; profilePhoto?: { url: string } };
   recipientId?: string;
   content?: string;
   text?: string;
   timestamp?: string;
+  read?: boolean;
 }
 
 interface Story {
@@ -94,10 +98,12 @@ const Home: React.FC = () => {
   const [currentStory, setCurrentStory] = useState<any | null>(null); // the story being viewed
   const [storiesFetched, setStoriesFetched] = useState(false)
   const [groups, setGroups] = useState<{ _id: string; name: string; profilePhoto?: { url: string } }[]>([]);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const scrollPositionRef = useRef<number>(0);
   const navigate = useNavigate();
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  // WebSocket
+  // Also update your WebSocket message handler in the useEffect:
   useEffect(() => {
     if (!userId) return;
     const ws = new ChatWebSocket(userId, (msg: WebSocketMessage) => {
@@ -105,7 +111,20 @@ const Home: React.FC = () => {
       if (msg.type === 'message') {
         const { sender, content, timestamp, recipientId } = msg.message || msg;
         if (!content) return;
-        setMessages(prev => [...prev, { type: 'message', sender, recipientId, content, timestamp }]);
+
+        // Only add WebSocket messages if they're from someone else to avoid duplicates
+        if (sender !== userId) {
+          setMessages(prev => [...prev, {
+            type: 'message',
+            sender,
+            recipientId,
+            content,
+            timestamp
+          }]);
+
+          // Refresh conversations to show new message in sidebar
+          fetchConversations();
+        }
       }
       if (msg.type === 'system' && msg.text) {
         setMessages(prev => [...prev, { type: 'system', text: msg.text }]);
@@ -115,6 +134,18 @@ const Home: React.FC = () => {
     return () => ws.close();
   }, [userId]);
 
+  // Add these helper functions
+  const preserveScrollPosition = () => {
+    scrollPositionRef.current = window.scrollY;
+  };
+
+  const restoreScrollPosition = () => {
+    if (!isInitialLoad) {
+      requestAnimationFrame(() => {
+        window.scrollTo(0, scrollPositionRef.current);
+      });
+    }
+  };
   const handleStoryFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     const file = e.target.files[0];
@@ -156,7 +187,7 @@ const Home: React.FC = () => {
     const formData = new FormData();
     formData.append('storyMedia', storyFile);
     formData.append('caption', storyCaption);
-    formData.append('privacy', 'friends'); // optional
+    formData.append('privacy', 'friends');
 
     try {
       const res = await fetch(`http://localhost:5000/user/${userId}/upload-story`, {
@@ -170,11 +201,14 @@ const Home: React.FC = () => {
       const data = await res.json();
       console.log('Story uploaded:', data);
 
-      // reset
       setStoryFile(null);
       setStoryPreview(null);
       setStoryCaption('');
-      fetchFriendsPosts(); // refresh feed if necessary
+
+      // Preserve scroll position before refreshing posts
+      preserveScrollPosition();
+      await fetchFriendsPosts();
+      restoreScrollPosition();
     } catch (err) {
       console.error(err);
     }
@@ -237,43 +271,70 @@ const Home: React.FC = () => {
     }
   };
 
+  // Update your fetchConversationMessages function:
   const fetchConversationMessages = async (friendId: string) => {
     if (!token || !userId) return;
+
     try {
       const res = await fetch(`http://localhost:5000/user/${userId}/conversation/${friendId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+
       if (!res.ok) throw new Error('Failed to fetch conversation');
-      const data: { messages: DisplayMessage[] } = await res.json();
-      setMessages(data.messages.map(msg => ({
-        type: 'message',
-        sender: msg.sender,
-        recipientId: msg.recipientId,
+
+      const data = await res.json();
+
+      // Transform the messages to match your DisplayMessage interface
+      const transformedMessages = data.messages.map((msg: any) => ({
+        _id: msg._id,
+        type: 'message' as const,
+        sender: typeof msg.sender === 'string' ? msg.sender : msg.sender?._id,
+        recipient: typeof msg.recipient === 'string' ? msg.recipient : msg.recipient?._id,
+        recipientId: typeof msg.recipient === 'string' ? msg.recipient : msg.recipient?._id,
         content: msg.content,
-        timestamp: msg.timestamp
-      })));
-    } catch (err) { console.error(err); }
+        timestamp: msg.timestamp,
+        read: msg.read
+      }));
+
+      setMessages(transformedMessages);
+    } catch (err) {
+      console.error('Error fetching messages:', err);
+      setMessages([]); // Clear messages on error
+    }
   };
+
   useEffect(() => { fetchFriends(); fetchOtherUsers(); fetchConversations(); fetchAllGroups(); }, [token, userId]);
 
   const fetchFriendsPosts = async () => {
     if (!token || !userId) return;
+
     try {
-      const res = await fetch(`http://localhost:5000/user/${userId}/friends`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`http://localhost:5000/user/${userId}/friends`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       if (!res.ok) throw new Error('Failed to fetch friends');
+
       const data: FriendResponse = await res.json();
       const normalizedFriends: NormalizedFriend[] = data.friends.map(f => {
         const friendUser = (f as any).user;
         const uid = typeof friendUser === 'string' ? friendUser : friendUser._id;
         const username = typeof friendUser === 'string' ? '' : friendUser.username;
         const profilePhoto = typeof friendUser === 'string' ? undefined : friendUser.profilePhoto;
-        return { _id: f._id || uid, user: uid, username: f.username || username, profilePhoto: f.profilePhoto || profilePhoto };
+        return {
+          _id: f._id || uid,
+          user: uid,
+          username: f.username || username,
+          profilePhoto: f.profilePhoto || profilePhoto
+        };
       });
+
       const allPosts = await Promise.all(
         normalizedFriends.map(async (friend) => {
           if (!friend.user) return [];
           try {
-            const friendRes = await fetch(`http://localhost:5000/user/${friend.user}/friend-data`, { headers: { Authorization: `Bearer ${token}` } });
+            const friendRes = await fetch(`http://localhost:5000/user/${friend.user}/friend-data`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
             if (!friendRes.ok) return [];
             const friendData = await friendRes.json();
             return (friendData.posts || []).map((post: any) => ({
@@ -282,13 +343,31 @@ const Home: React.FC = () => {
               friendName: friendData.username,
               friendAvatar: friendData.profilePhoto?.url,
             }));
-          } catch { return []; }
+          } catch {
+            return [];
+          }
         })
       );
-      setFriendsPosts(allPosts.flat());
-    } catch (err) { console.error(err); }
-  };
 
+      const flatPosts = allPosts.flat();
+
+      // Sort posts by creation date to ensure consistent order
+      const sortedPosts = flatPosts.sort((a, b) =>
+        new Date(b.createdAt || b.timestamp || 0).getTime() -
+        new Date(a.createdAt || a.timestamp || 0).getTime()
+      );
+
+      setFriendsPosts(sortedPosts);
+
+      // Mark as no longer initial load after first fetch
+      if (isInitialLoad) {
+        setIsInitialLoad(false);
+      }
+
+    } catch (err) {
+      console.error(err);
+    }
+  };
   useEffect(() => { fetchFriendsPosts(); }, [token, userId]);
 
 
@@ -380,57 +459,71 @@ const Home: React.FC = () => {
     } catch (err) { console.error(err); }
   };
 
-  // Chat window functions
-  const openChatWindow = (friend: Friend) => {
+  // Fix the openChatWindow function to properly load messages:
+  const openChatWindow = async (friend: Friend) => {
     setRecipient(friend);
     setChatBarOpen(true);
-    fetchConversationMessages(friend._id); // fetch messages here
+    setMessages([]); // Clear previous messages immediately
+
+    // Load conversation messages
+    await fetchConversationMessages(friend._id);
   };
 
   const closeChatWindow = () => { setRecipient(null); setMessages([]); setChatBarOpen(false); };
 
 
 
+  // Update your sendMessage function to handle the new backend response:
   const sendMessage = async () => {
-    if (!recipient || !chatInput || !userId || !token) return;
+    if (!recipient || !chatInput.trim() || !userId || !token) return;
+
+    const messageContent = chatInput.trim();
+    setChatInput(""); // Clear input immediately for better UX
 
     try {
-      // Call backend to persist message
+      // 1. First, save message to database via API
       const res = await fetch(`http://localhost:5000/user/${userId}/message/${recipient._id}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ content: chatInput }),
+        body: JSON.stringify({ content: messageContent }),
       });
 
-      if (!res.ok) throw new Error("Failed to send message");
+      if (!res.ok) {
+        throw new Error("Failed to send message");
+      }
+
       const savedMessage = await res.json();
 
-      // Optionally also send over WebSocket for realtime updates
-      chatWs?.sendMessage(recipient._id, chatInput);
+      // 2. Add message to local state immediately with the actual saved message data
+      const newMessage: DisplayMessage = {
+        _id: savedMessage._id,
+        type: "message",
+        sender: userId,
+        recipient: recipient._id,
+        recipientId: recipient._id,
+        content: savedMessage.content,
+        timestamp: savedMessage.timestamp,
+        read: savedMessage.read || false,
+      };
 
-      // Update local state
-      setMessages(prev => [
-        ...prev,
-        {
-          type: "message",
-          sender: userId,
-          recipientId: recipient._id,
-          content: savedMessage.content,
-          timestamp: savedMessage.timestamp,
-        },
-      ]);
+      setMessages(prev => [...prev, newMessage]);
 
-      setChatInput("");
-      fetchConversations(); // refresh sidebar with latest message
+      // 3. Send via WebSocket for real-time updates (optional, for other users)
+      chatWs?.sendMessage(recipient._id, messageContent);
+
+      // 4. Refresh conversations list to show latest message
+      fetchConversations();
+
     } catch (err) {
-      console.error(err);
+      console.error("Error sending message:", err);
+      // Re-add the message content to input if sending failed
+      setChatInput(messageContent);
+      alert("Failed to send message. Please try again.");
     }
   };
-
-
   const activeChats = conversations;
 
   return (
@@ -644,6 +737,9 @@ const Home: React.FC = () => {
                     <button
                       className={`like-btn ${post.likes?.includes(userId) ? 'liked' : ''}`}
                       onClick={async () => {
+                        // Preserve scroll position before state update
+                        preserveScrollPosition();
+
                         try {
                           const res = await fetch(
                             `http://localhost:5000/user/${post.userId}/posts/${post._id}/like`,
@@ -658,6 +754,9 @@ const Home: React.FC = () => {
                               p._id === post._id ? { ...p, likes: data.likes } : p
                             )
                           );
+
+                          // Restore scroll position after state update
+                          restoreScrollPosition();
                         } catch (err) {
                           console.error(err);
                         }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useUser } from '../../BACKEND/context/UserContext';
 import "./navbarStyles.css"
 import messageImage from "./CompImages/messenger.png";
@@ -23,8 +23,10 @@ export default function Navbar() {
     const { userId, token, logout } = useUser();
     const [isLoading, setIsLoading] = useState(false);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-    const [messageCount] = useState(3); // Mock notification count
-    const [notificationCount] = useState(7); // Mock notification count
+    const [messageCount] = useState(3);
+    const [notificationCount] = useState(7);
+    const [dropdownOpen, setDropdownOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
 
     // Fetch user profile if logged in
@@ -35,6 +37,20 @@ export default function Navbar() {
             setUserProfile(null);
         }
     }, [userId]);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setDropdownOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, []);
 
     const fetchUserProfile = async () => {
         setIsLoading(true);
@@ -60,7 +76,15 @@ export default function Navbar() {
 
     const handleLogout = () => {
         logout();
+        setDropdownOpen(false);
         navigate('/Login');
+    };
+
+    const toggleDropdown = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('Toggle dropdown clicked, current state:', dropdownOpen); // Debug log
+        setDropdownOpen(prev => !prev);
     };
 
     // Check if user is admin
@@ -78,6 +102,7 @@ export default function Navbar() {
                         <div className="nav-tooltip">main interface</div>
                     </a>
                 </li>
+                
                 {/* Admin Dashboard - Only show for admin users */}
                 {isAdmin && (
                     <li className="admin-nav">
@@ -86,16 +111,6 @@ export default function Navbar() {
                             <div className="nav-tooltip">admin.panel</div>
                         </a>
                     </li>
-                )}
-                {isAdmin && (
-                    <>
-                        <div style={{
-                            borderTop: '1px solid #30363d',
-                            margin: '8px 0',
-                            opacity: 0.3
-                        }}></div>
-                        <a href="/admin/dashboard" className="admin-link">admin.panel</a>
-                    </>
                 )}
 
                 <li style={{ position: 'relative' }}>
@@ -107,6 +122,7 @@ export default function Navbar() {
                         <div className="nav-tooltip">messages.exe</div>
                     </a>
                 </li>
+                
                 <li style={{ position: 'relative' }}>
                     <a href="/notifications">
                         <img src={notificationImage} alt="Notifications" className="icon" />
@@ -119,43 +135,58 @@ export default function Navbar() {
 
                 <li className="profile-item">
                     {userId ? (
-                        // User is logged in - show profile picture with dropdown
-                        <div className="profile-dropdown">
+                        <div 
+                            className={`profile-dropdown ${dropdownOpen ? 'dropdown-open' : ''}`}
+                            ref={dropdownRef}
+                        >
                             <img
                                 src={userProfile?.profilePhoto?.url || profileImage}
                                 alt="Profile"
                                 className="profile-picture"
+                                onClick={toggleDropdown}
+                                style={{ cursor: 'pointer' }} // Ensure cursor shows it's clickable
                             />
-                            <div className="dropdown-content">
-                                <a href="/profile">profile.config</a>
-                                <a href="/settings">settings.json</a>
-                                <a href="/projects">projects/</a>
-                                <a href="/repositories">repositories/</a>
+                            
+                            {/* Dropdown Menu */}
+                            <div className={`dropdown-content ${dropdownOpen ? 'show' : ''}`}>
+                                <a href="/profile" onClick={() => setDropdownOpen(false)}>
+                                    profile.config
+                                </a>
+                                <a href="/settings" onClick={() => setDropdownOpen(false)}>
+                                    settings.json
+                                </a>
+                                <a href="/projects" onClick={() => setDropdownOpen(false)}>
+                                    projects/
+                                </a>
+                                <a href="/repositories" onClick={() => setDropdownOpen(false)}>
+                                    repositories/
+                                </a>
 
-                                {/* Admin Dashboard link in dropdown as well (optional) */}
+                                {/* Admin Dashboard link */}
                                 {isAdmin && (
                                     <>
-                                        <div style={{
-                                            borderTop: '1px solid #30363d',
-                                            margin: '8px 0',
-                                            opacity: 0.3
-                                        }}></div>
-                                        <a href="/admin/dashboard">admin.panel</a>
+                                        <div className="dropdown-divider"></div>
+                                        <a 
+                                            href="/admin/dashboard" 
+                                            className="admin-link"
+                                            onClick={() => setDropdownOpen(false)}
+                                        >
+                                            admin.panel
+                                        </a>
                                     </>
                                 )}
 
-                                <div style={{
-                                    borderTop: '1px solid #30363d',
-                                    margin: '8px 0',
-                                    opacity: 0.3
-                                }}></div>
-                                <button onClick={handleLogout} className="logout-btn">
+                                <div className="dropdown-divider"></div>
+                                <button 
+                                    onClick={handleLogout} 
+                                    className="logout-btn"
+                                    type="button"
+                                >
                                     logout
                                 </button>
                             </div>
                         </div>
                     ) : (
-                        // User is not logged in - show login button
                         <a href="/Login" className="login-button">
                             Login
                         </a>
